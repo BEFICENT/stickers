@@ -51,6 +51,9 @@ class CropAndScale {
     private val _progress = MutableStateFlow(ProgressState())
     val progress = _progress.asStateFlow()
 
+    private val _requestId = MutableStateFlow<String?>(null)
+    val requestId = _requestId.asStateFlow()
+
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var transcodeJob: Job? = null
 
@@ -69,6 +72,7 @@ class CropAndScale {
      * @param maxFps The maximum frames per second for the output video. If null, uses original FPS.
      */
     fun start(
+        requestId: String,
         inputFile: File,
         outputFile: File,
         startTimeUs: Long,
@@ -76,10 +80,10 @@ class CropAndScale {
         maxFps: Int
     ) {
         if (_status.value == State.RUNNING) {
-            Log.w(LOG_TAG, "Transcoding is already in progress. Ignoring new request.")
-            return
+            throw IllegalStateException("Transcoding is already in progress.")
         }
 
+        _requestId.value = requestId
         transcodeJob = scope.launch {
             _status.value = State.RUNNING
             _progress.value = ProgressState()

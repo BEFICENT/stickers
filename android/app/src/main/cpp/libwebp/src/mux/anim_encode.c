@@ -583,8 +583,10 @@ static int GetSubRects(const WebPPicture* const prev_canvas,
   }
   // Lossy frame rectangle.
   params->rect_lossy = params->rect_ll;  // seed with lossless rect.
+  // Keep exact change bounds even when the frame payload is encoded lossily.
+  // Ignoring small deltas here lets errors accumulate as visible frame trails.
   return GetSubRect(prev_canvas, curr_canvas, is_key_frame, is_first_frame,
-                    params->empty_rect_allowed, 0, quality,
+                    params->empty_rect_allowed, 1, quality,
                     &params->rect_lossy, &params->sub_frame_lossy);
 }
 
@@ -872,10 +874,10 @@ static WebPEncodingError GenerateCandidates(
   use_blending_ll =
       !is_key_frame &&
       IsLosslessBlendingPossible(prev_canvas, curr_canvas, &params->rect_ll);
-  use_blending_lossy =
-      !is_key_frame &&
-      IsLossyBlendingPossible(prev_canvas, curr_canvas, &params->rect_lossy,
-                              config_lossy->quality);
+  // Approximate lossy blending makes "similar" blocks transparent and can
+  // leave visible remnants of earlier animation frames. Exact subframe bounds
+  // already provide safe delta compression without that accumulation.
+  use_blending_lossy = 0;
 
   // Pick candidates to be tried.
   if (!enc->options.allow_mixed) {

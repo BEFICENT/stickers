@@ -4,78 +4,45 @@ import 'package:flutter/services.dart';
 
 import 'common.dart';
 
+class AnimatedEncodeException implements Exception {
+  final String message;
+
+  const AnimatedEncodeException(this.message);
+
+  @override
+  String toString() => message;
+}
+
 class OverlayAndEncodeService {
-  // The channel names must match those defined in MainActivity.kt
   static const _methodChannel = MethodChannel('de.loicezt.stickers/methods');
-  static const _eventChannel = EventChannel('de.loicezt.stickers/progress_encode');
+  static const _eventChannel =
+      EventChannel('de.loicezt.stickers/progress_encode');
+  static const _timeout = Duration(minutes: 5);
+  static var _requestSequence = 0;
+  static var _running = false;
 
-  // A stream controller to expose a single, unified progress stream.
-  final _progressController = StreamController<Progress>.broadcast();
-
-  Stream<Progress> get progressStream => _progressController.stream;
-
-  OverlayAndEncodeService() {
-    // Listen to the native event channel as soon as the service is created.
-    _eventChannel.receiveBroadcastStream().listen(_onProgress, onError: _onError);
-  }
-
-  /// Handles incoming data from the native EventChannel.
-  void _onProgress(dynamic data) {
-    if (data is Map) {
-      final statusString = data['status'] as String?;
-
-      // Safely parse the status string into an enum.
-      final status = Status.values.firstWhere(
-        (e) => e.name == statusString,
-        orElse: () => Status.IDLE,
-      );
-
-      final progress = Progress(
-        status: status,
-        progress: (data['progress'] as num?)?.toDouble() ?? 0.0,
-        currentFrame: data['currentFrame'] as int? ?? 0,
-        totalFrames: data['totalFrames'] as int? ?? 0,
-      );
-      _progressController.add(progress);
-    }
-  }
-
-  /// Handles errors from the native EventChannel.
-  void _onError(Object error) {
-    // ignore: avoid_print
-    print("Error on EventChannel: $error");
-    _progressController.add(Progress(status: Status.FAILED));
-  }
-
-  /// Calls the native method to start the overlay and encoding process.
-  Future<void> start({
+  Future<void> encodeVideo({
     required String videoFile,
     required String overlayFile,
     required String outputFile,
     required WebPConfig config,
     required int fps,
-  }) async {
-    try {
-      // The method name 'startOverlay' and the argument keys must match
-      // what is expected in MainActivity.kt.
-      await _methodChannel.invokeMethod(
-        'startOverlay',
-        {
-          'videoFile': videoFile,
-          'overlayFile': overlayFile,
-          'outputFile': outputFile,
-          'fps': fps,
-          'config': config.toMap(),
-        },
-      );
-    } on PlatformException catch (e) {
-      // ignore: avoid_print
-      print("Failed to start overlay process: '${e.message}'.");
-      _progressController.add(Progress(status: Status.FAILED));
-    }
+    void Function(Progress progress)? onProgress,
+  }) {
+    return _encode(
+      method: 'startOverlay',
+      arguments: {
+        'videoFile': videoFile,
+        'overlayFile': overlayFile,
+        'outputFile': outputFile,
+        'fps': fps,
+        'config': config.toMap(),
+      },
+      onProgress: onProgress,
+    );
   }
 
-  Future<void> startGif({
+  Future<void> encodeGif({
     required String gifFile,
     required String overlayFile,
     required String outputFile,
@@ -83,39 +50,95 @@ class OverlayAndEncodeService {
     required Duration end,
     required WebPConfig config,
     required int fps,
+    void Function(Progress progress)? onProgress,
+  }) {
+    return _encode(
+      method: 'startGifOverlay',
+      arguments: {
+        'gifFile': gifFile,
+        'overlayFile': overlayFile,
+        'outputFile': outputFile,
+        'startMs': start.inMilliseconds,
+        'endMs': end.inMilliseconds,
+        'fps': fps,
+        'config': config.toMap(),
+      },
+      onProgress: onProgress,
+    );
+  }
+
+  Future<void> _encode({
+    required String method,
+    required Map<String, Object?> arguments,
+    void Function(Progress progress)? onProgress,
   }) async {
+    if (_running) {
+      throw const AnimatedEncodeException(
+          'Another animated export is running.');
+    }
+    _running = true;
+    final requestId =
+        '${DateTime.now().microsecondsSinceEpoch}_${_requestSequence++}';
+    final completion = Completer<void>();
+    late final StreamSubscription<Object?> subscription;
+    subscription = _eventChannel.receiveBroadcastStream().listen(
+      (data) {
+        if (data is! Map || data['requestId'] != requestId) return;
+        final progress = _parseProgress(data);
+        onProgress?.call(progress);
+        if (progress.status == Status.success && !completion.isCompleted) {
+          completion.complete();
+        } else if (progress.status == Status.failed &&
+            !completion.isCompleted) {
+          completion.completeError(
+            const AnimatedEncodeException('Animated WebP export failed.'),
+          );
+        } else if (progress.status == Status.cancelled &&
+            !completion.isCompleted) {
+          completion.completeError(
+            const AnimatedEncodeException(
+                'Animated WebP export was cancelled.'),
+          );
+        }
+      },
+      onError: (Object error) {
+        if (!completion.isCompleted) completion.completeError(error);
+      },
+    );
+
     try {
-      await _methodChannel.invokeMethod(
-        'startGifOverlay',
-        {
-          'gifFile': gifFile,
-          'overlayFile': overlayFile,
-          'outputFile': outputFile,
-          'startMs': start.inMilliseconds,
-          'endMs': end.inMilliseconds,
-          'fps': fps,
-          'config': config.toMap(),
-        },
+      await _methodChannel.invokeMethod<void>(method, {
+        ...arguments,
+        'requestId': requestId,
+      });
+      await completion.future.timeout(
+        _timeout,
+        onTimeout: () => throw const AnimatedEncodeException(
+          'Animated WebP export timed out.',
+        ),
       );
-    } on PlatformException catch (e) {
-      // ignore: avoid_print
-      print("Failed to start GIF overlay process: '${e.message}'.");
-      _progressController.add(Progress(status: Status.FAILED));
+    } on PlatformException catch (error) {
+      throw AnimatedEncodeException(
+        error.message ?? 'Could not start animated WebP export.',
+      );
+    } finally {
+      await subscription.cancel();
+      _running = false;
     }
   }
 
-  /// Calls the native method to cancel the ongoing process.
-  Future<void> cancel() async {
-    try {
-      await _methodChannel.invokeMethod('cancelOverlay');
-    } on PlatformException catch (e) {
-      // ignore: avoid_print
-      print("Failed to cancel overlay process: '${e.message}'.");
-    }
+  Progress _parseProgress(Map<dynamic, dynamic> data) {
+    final statusName = data['status'] as String?;
+    return Progress(
+      status: Status.values.firstWhere(
+        (status) => status.name.toUpperCase() == statusName,
+        orElse: () => Status.idle,
+      ),
+      progress: (data['progress'] as num?)?.toDouble() ?? 0,
+      currentFrame: (data['currentFrame'] as num?)?.toInt() ?? 0,
+      totalFrames: (data['totalFrames'] as num?)?.toInt() ?? 0,
+    );
   }
 
-  /// Cleans up the stream controller.
-  void dispose() {
-    _progressController.close();
-  }
+  Future<void> cancel() => _methodChannel.invokeMethod<void>('cancelOverlay');
 }

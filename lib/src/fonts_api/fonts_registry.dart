@@ -12,7 +12,7 @@ enum FontType { bundled, custom, googleFont }
 /// Returns the font file path.
 Future<String?> _registerBundledFont(String family, Directory fontsDir) async {
   if (family == "sans-serif" || family == "monospace") return null;
-  File fontFile = File("${fontsDir.path}$family.ttf");
+  File fontFile = File("${fontsDir.path}${Platform.pathSeparator}$family.ttf");
   if (!await fontFile.exists()) {
     debugPrint("Copying file to ${fontFile.path}");
     await fontFile.create();
@@ -261,14 +261,16 @@ class FontsRegistry {
 
   // Delete a font from the registry
   // Also removes associated TTF files
-  static void delete(String fontName) {
+  static Future<void> delete(String fontName) async {
     final entry = _entries.remove(fontName);
     if (entry == null) return;
     if (entry.fontFile != null) {
-      File(entry.fontFile!).delete();
+      final file = File(entry.fontFile!);
+      if (await file.exists()) await file.delete();
     }
     if (entry.previewFile != null) {
-      File(entry.fontFile!).delete();
+      final preview = File(entry.previewFile!);
+      if (await preview.exists()) await preview.delete();
     }
     _orderedEntries.remove(entry);
     enqueueSave();

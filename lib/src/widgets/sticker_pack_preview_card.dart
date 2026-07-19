@@ -9,7 +9,6 @@ import 'package:stickers/src/data/load_store.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/dialogs/delete_confirm_dialog.dart';
 import 'package:stickers/src/dialogs/edit_pack_dialog.dart';
-import 'package:stickers/src/globals.dart';
 import 'package:stickers/src/pages/sticker_pack_page.dart';
 
 class StickerPackPreviewCard extends StatefulWidget {
@@ -98,14 +97,8 @@ class _StickerPackPreviewCardState extends State<StickerPackPreviewCard> {
                               DeleteConfirmDialog(widget.pack.title)).then(
                         (value) async {
                           if (value == true) {
-                            packs.remove(widget.pack);
+                            await deletePack(widget.pack);
                             widget.deleteCallback();
-                            final dir =
-                                Directory("$packsDir/${widget.pack.id}");
-                            if (await dir.exists()) {
-                              await dir.delete(recursive: true);
-                            }
-                            await savePacks(packs);
                           }
                         },
                       );

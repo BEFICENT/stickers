@@ -24,7 +24,7 @@ class StickerPacksPageState extends State<StickerPacksPage> {
   @override
   initState() {
     super.initState();
-    homeState = this;
+    packs.addListener(update);
   }
 
   void update() {
@@ -32,6 +32,12 @@ class StickerPacksPageState extends State<StickerPacksPage> {
     // We don't necessarily need to await savePacks here if it was already called elsewhere,
     // but we should ensure the UI reflects the current state of 'packs'.
     setState(() {});
+  }
+
+  @override
+  void dispose() {
+    packs.removeListener(update);
+    super.dispose();
   }
 
   @override

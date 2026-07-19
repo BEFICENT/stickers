@@ -44,13 +44,16 @@ class OverlayAndEncode {
     private val _progress = MutableStateFlow(ProgressState())
     val progress = _progress.asStateFlow()
 
+    private val _requestId = MutableStateFlow<String?>(null)
+    val requestId = _requestId.asStateFlow()
+
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var encodeJob: Job? = null
 
     companion object {
         private const val LOG_TAG = "OverlayAndEncode"
         private const val OUTPUT_DIMENSION = 512
-        private const val MAX_ANIMATED_DURATION_MS = 10_000
+        private const val MAX_ANIMATED_DURATION_MS = 9_900
     }
 
     /**
@@ -63,6 +66,7 @@ class OverlayAndEncode {
      */
     // MODIFIED: Added maxFps parameter
     fun start(
+        requestId: String,
         videoFile: File,
         overlayFile: File,
         outputFile: File,
@@ -70,10 +74,10 @@ class OverlayAndEncode {
         maxFps: Int
     ) {
         if (_status.value == State.RUNNING) {
-            Log.w(LOG_TAG, "Encoding is already in progress. Ignoring new request.")
-            return
+            throw IllegalStateException("Encoding is already in progress.")
         }
 
+        _requestId.value = requestId
         encodeJob = scope.launch {
             _status.value = State.RUNNING
             _progress.value = ProgressState()
@@ -102,6 +106,7 @@ class OverlayAndEncode {
     }
 
     fun startGif(
+        requestId: String,
         gifFile: File,
         overlayFile: File,
         outputFile: File,
@@ -111,10 +116,10 @@ class OverlayAndEncode {
         maxFps: Int
     ) {
         if (_status.value == State.RUNNING) {
-            Log.w(LOG_TAG, "Encoding is already in progress. Ignoring new request.")
-            return
+            throw IllegalStateException("Encoding is already in progress.")
         }
 
+        _requestId.value = requestId
         encodeJob = scope.launch {
             _status.value = State.RUNNING
             _progress.value = ProgressState()
@@ -320,6 +325,12 @@ class OverlayAndEncode {
                     OUTPUT_DIMENSION,
                     OUTPUT_DIMENSION
                 )
+                val frameEndTimesMs = IntArray(gif.numberOfFrames)
+                var cumulativeFrameDurationMs = 0
+                for (frameIndex in frameEndTimesMs.indices) {
+                    cumulativeFrameDurationMs += gif.getFrameDuration(frameIndex).coerceAtLeast(1)
+                    frameEndTimesMs[frameIndex] = cumulativeFrameDurationMs
+                }
 
                 val originalFrameRate = max(1, ceil(gif.numberOfFrames * 1000.0 / gifDurationMs).toInt())
                 val targetFrameRate = min(max(1, maxFps), originalFrameRate)
@@ -332,14 +343,25 @@ class OverlayAndEncode {
                 }
 
                 val pixelBuffer = ByteBuffer.allocateDirect(OUTPUT_DIMENSION * OUTPUT_DIMENSION * 4)
+                var sourceFrameIndex = 0
                 for (frame in 0 until totalFrames) {
                     if (!currentCoroutineContext().isActive) break
                     val outputTimestampMs = min(frame * frameIntervalMs, trimmedDurationMs - 1)
                     val sourceTimestampMs = min(effectiveStartMs + outputTimestampMs, max(0, gifDurationMs - 1))
+                    while (
+                        sourceFrameIndex < frameEndTimesMs.lastIndex &&
+                        sourceTimestampMs >= frameEndTimesMs[sourceFrameIndex]
+                    ) {
+                        sourceFrameIndex++
+                    }
 
                     canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
-                    val gifFrame = gif.seekToPositionAndGet(sourceTimestampMs)
-                    canvas.drawBitmap(gifFrame, null, gifBounds, paint)
+                    val gifFrame = gif.seekToFrameAndGet(sourceFrameIndex)
+                    try {
+                        canvas.drawBitmap(gifFrame, null, gifBounds, paint)
+                    } finally {
+                        gifFrame.recycle()
+                    }
                     canvas.drawBitmap(overlay, null, Rect(0, 0, OUTPUT_DIMENSION, OUTPUT_DIMENSION), paint)
 
                     pixelBuffer.rewind()

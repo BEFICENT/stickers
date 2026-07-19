@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -39,6 +40,7 @@ class StickersApp extends StatefulWidget {
 
 class StickersAppState extends State<StickersApp> {
   late Locale _locale;
+  StreamSubscription<SharedMedia>? _sharedMediaSubscription;
 
   @override
   void initState() {
@@ -59,27 +61,40 @@ class StickersAppState extends State<StickersApp> {
   // Platform messages are asynchronous, so we initialize in an async method.
   Future<void> initPlatformState() async {
     final handler = ShareHandlerPlatform.instance;
-    media = await handler.getInitialSharedMedia();
-    if (media != null) {
+    final initialMedia = await handler.getInitialSharedMedia();
+    if (initialMedia != null) {
       debugPrint("Initial Media received");
-      await _processMedia(media!);
-      setState(() {});
-      homeState?.setState(() {});
+      await _processMedia(initialMedia);
+      if (mounted) {
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _openPendingMedia());
+      }
     }
-    handler.sharedMediaStream.listen((SharedMedia media) async {
-      navigatorKey.currentState!
-          .pushNamedAndRemoveUntil('/', (Route<dynamic> route) => false);
+    _sharedMediaSubscription =
+        handler.sharedMediaStream.listen((SharedMedia sharedMedia) async {
       if (!mounted) return;
       debugPrint("Media Stream received");
-      await _processMedia(media);
-      setState(() {});
-      homeState?.setState(() {});
+      await _processMedia(sharedMedia);
+      if (mounted) _openPendingMedia();
     });
-    if (!mounted) return;
+  }
 
-    setState(() {
-      // _platformVersion = platformVersion;
-    });
+  void _openPendingMedia() {
+    final pendingMedia = media;
+    final navigator = navigatorKey.currentState;
+    if (!mounted || pendingMedia == null || navigator == null) return;
+    media = null;
+    navigator.pushNamedAndRemoveUntil(
+      SelectPackPage.routeName,
+      (route) => false,
+      arguments: pendingMedia,
+    );
+  }
+
+  @override
+  void dispose() {
+    _sharedMediaSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -137,12 +152,11 @@ class StickersAppState extends State<StickersApp> {
             return MaterialPageRoute<void>(
               settings: routeSettings,
               builder: (BuildContext context) {
-                if (media != null) {
-                  final page = SelectPackPage(media!);
-                  media = null;
-                  return page;
-                }
                 switch (routeSettings.name) {
+                  case SelectPackPage.routeName:
+                    return SelectPackPage(
+                      routeSettings.arguments as SharedMedia,
+                    );
                   case FontsManagerPage.routeName:
                     return FontsManagerPage();
                   case SettingsPage.routeName:
@@ -200,12 +214,27 @@ class StickersAppState extends State<StickersApp> {
   }
 
   Future<void> _processMedia(SharedMedia media) async {
-    if (media.attachments!.first!.path.toLowerCase().endsWith(".stickify") ||
-        media.attachments!.first!.path.toLowerCase().endsWith(".zip") ||
-        media.attachments!.first!.path.toLowerCase().endsWith(".wastickers")) {
+    final attachments = media.attachments;
+    final attachment = attachments?.whereType<SharedAttachment>().firstOrNull;
+    if (attachment == null || attachment.path.isEmpty) {
+      _showShareError(
+        (context) => AppLocalizations.of(context)!.unrecognizedFormat,
+      );
+      return;
+    }
+    final lowerPath = attachment.path.toLowerCase();
+    if (!await File(attachment.path).exists()) {
+      _showShareError(
+        (context) => AppLocalizations.of(context)!.couldntLoadMedia,
+      );
+      return;
+    }
+    if (lowerPath.endsWith(".stickify") ||
+        lowerPath.endsWith(".zip") ||
+        lowerPath.endsWith(".wastickers")) {
       try {
-        await importPack(File(media.attachments!.first!.path));
-        if (context.mounted) setState(() {});
+        await importPack(File(attachment.path));
+        if (mounted) setState(() {});
       } on Exception catch (_) {
         if (mounted) {
           showDialog(
@@ -218,7 +247,6 @@ class StickersAppState extends State<StickersApp> {
       }
       return;
     }
-    final attachment = media.attachments!.first!;
     final isGif = attachment.path.toLowerCase().endsWith(".gif");
     if (attachment.type != SharedAttachmentType.image && !isGif) {
       if (mounted) {
@@ -237,6 +265,18 @@ class StickersAppState extends State<StickersApp> {
           widget.settingsController.defaultAuthor);
       this.media = null;
     }
+  }
+
+  void _showShareError(String Function(BuildContext context) message) {
+    final currentContext = navigatorKey.currentContext;
+    if (!mounted || currentContext == null) return;
+    showDialog(
+      context: currentContext,
+      builder: (context) => ErrorDialog(
+        message: message(context),
+        title: message(context),
+      ),
+    );
   }
 
   Future<void> _quickAdd(
@@ -263,13 +303,7 @@ class StickersAppState extends State<StickersApp> {
     final cropped = await cropSticker(cropRect, rawImageData, pack, index, 0);
     await addToPack(pack, index, cropped);
 
-    navigatorKey.currentState!
-        .pushNamed("/pack", arguments: pack)
-        .then((value) {
-      if (homeState != null) {
-        homeState!.update();
-      }
-    });
+    navigatorKey.currentState?.pushNamed("/pack", arguments: pack);
     if (!mounted) return;
     await sendToWhatsappWithErrorHandling(pack, context);
   }

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
@@ -9,9 +8,9 @@ import 'package:stickers/src/batch/batch_import_queue.dart';
 import 'package:stickers/src/constants.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/dialogs/error_dialog.dart';
+import 'package:stickers/src/media/animated_trim.dart';
 import 'package:stickers/src/pages/crop_page.dart';
 import 'package:stickers/src/pages/default_page.dart';
-import 'package:stickers/src/video/common.dart';
 import 'package:stickers/src/video/crop_scale.dart';
 import 'package:video_player/video_player.dart';
 
@@ -76,7 +75,7 @@ class _VideoCropPageState extends State<VideoCropPage>
       }
     }).then((_) => setState(() {
           _ready = true;
-          _range = _initialRange(_controller.value.duration);
+          _range = initialAnimatedTrimRange(_controller.value.duration);
         }));
     _controller.addListener(_videoListener);
     _controller.setVolume(0);
@@ -100,6 +99,7 @@ class _VideoCropPageState extends State<VideoCropPage>
     _maskColorController.removeListener(_animationListener);
     _maskColorController.dispose();
     _controller.dispose();
+    service.dispose();
   }
 
   @override
@@ -171,7 +171,6 @@ class _VideoCropPageState extends State<VideoCropPage>
                 Stack(
                   children: [
                     RangeSlider(
-                        year2023: false,
                         values: _range,
                         onChangeEnd: (_) async {
                           if (_seekTarget ==
@@ -197,7 +196,11 @@ class _VideoCropPageState extends State<VideoCropPage>
                         },
                         onChanged: (values) {
                           final movedStart = _range.start != values.start;
-                          values = _clampRange(values, movedStart: movedStart);
+                          values = clampAnimatedTrimRange(
+                            values,
+                            _controller.value.duration,
+                            movedStart: movedStart,
+                          );
                           final Duration seekTarget;
                           if (_range.start != values.start) {
                             seekTarget =
@@ -221,7 +224,6 @@ class _VideoCropPageState extends State<VideoCropPage>
                           value: _controller.value.position.inMilliseconds /
                               _controller.value.duration.inMilliseconds,
                           onChanged: (_) {},
-                          year2023: false,
                         ),
                       ),
                   ],
@@ -306,7 +308,7 @@ class _VideoCropPageState extends State<VideoCropPage>
     final start = _controller.value.duration * _range.start;
     final end = _controller.value.duration * _range.end;
     final selected = end - start;
-    if (selected <= Duration.zero || selected > maxAnimatedStickerDuration) {
+    if (!isValidAnimatedTrim(selected)) {
       showDialog(
         context: context,
         builder: (context) => ErrorDialog(
@@ -323,29 +325,12 @@ class _VideoCropPageState extends State<VideoCropPage>
       _controller.pause();
       final output =
           "$mediaCacheDir/import_${DateTime.now().millisecondsSinceEpoch}.mp4";
-      await service.start(
+      await service.trim(
         inputFile: widget.imagePath,
         outputFile: output,
         start: start,
         end: end,
       );
-      await for (final s in service.progressStream) {
-        if (s.status == Status.SUCCESS) {
-          break;
-        } else if (s.status == Status.FAILED) {
-          print("Transcoding failed!");
-          if (mounted) {
-            showDialog(
-                context: context,
-                builder: (context) {
-                  return ErrorDialog(
-                      title: AppLocalizations.of(context)!.trimFailed,
-                      message: AppLocalizations.of(context)!.trimFailedMsg);
-                });
-          }
-          throw Exception();
-        }
-      }
       if (!mounted) return;
       Navigator.of(context).pushNamed("/edit",
           arguments: EditArguments(
@@ -355,38 +340,18 @@ class _VideoCropPageState extends State<VideoCropPage>
             type: MediaType.video,
             batchQueue: widget.batchQueue,
           ));
-    } finally {
-      setState(() {
-        _exporting = false;
-      });
-    }
-  }
-
-  RangeValues _initialRange(Duration duration) {
-    if (duration <= Duration.zero) return RangeValues(0, 1);
-    if (duration <= maxAnimatedStickerDuration) return RangeValues(0, 1);
-    return RangeValues(
-        0, maxAnimatedStickerDuration.inMilliseconds / duration.inMilliseconds);
-  }
-
-  RangeValues _clampRange(RangeValues values, {required bool movedStart}) {
-    final duration = _controller.value.duration;
-    if (duration <= Duration.zero) return RangeValues(0, 1);
-    final maxSpan = min(1.0,
-        maxAnimatedStickerDuration.inMilliseconds / duration.inMilliseconds);
-    var start = values.start.clamp(0.0, 1.0).toDouble();
-    var end = values.end.clamp(0.0, 1.0).toDouble();
-
-    if (end - start > maxSpan) {
-      if (movedStart) {
-        end = min(1.0, start + maxSpan);
-      } else {
-        start = max(0.0, end - maxSpan);
+    } on Exception {
+      if (mounted) {
+        await showDialog(
+          context: context,
+          builder: (context) => ErrorDialog(
+            title: AppLocalizations.of(context)!.trimFailed,
+            message: AppLocalizations.of(context)!.trimFailedMsg,
+          ),
+        );
       }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
     }
-    if (end <= start) {
-      end = min(1.0, start + .001);
-    }
-    return RangeValues(start, end);
   }
 }

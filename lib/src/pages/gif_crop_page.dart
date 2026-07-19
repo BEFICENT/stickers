@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:stickers/generated/intl/app_localizations.dart';
@@ -9,6 +8,7 @@ import 'package:stickers/src/constants.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/dialogs/error_dialog.dart';
 import 'package:stickers/src/gif/gif_info.dart';
+import 'package:stickers/src/media/animated_trim.dart';
 import 'package:stickers/src/pages/crop_page.dart';
 import 'package:stickers/src/pages/default_page.dart';
 
@@ -57,7 +57,7 @@ class _GifCropPageState extends State<GifCropPage> {
       if (!mounted) return;
       setState(() {
         _info = info;
-        _range = _initialRange(info.duration);
+        _range = initialAnimatedTrimRange(info.duration);
         _position = Duration.zero;
         _loading = false;
       });
@@ -126,12 +126,14 @@ class _GifCropPageState extends State<GifCropPage> {
                         child: Stack(
                           children: [
                             RangeSlider(
-                              year2023: false,
                               values: _range,
                               onChanged: (values) {
                                 final movedStart = values.start != _range.start;
-                                final next =
-                                    _clampRange(values, movedStart: movedStart);
+                                final next = clampAnimatedTrimRange(
+                                  values,
+                                  info.duration,
+                                  movedStart: movedStart,
+                                );
                                 setState(() {
                                   _range = next;
                                   _position = _durationFromFraction(next.start);
@@ -147,7 +149,6 @@ class _GifCropPageState extends State<GifCropPage> {
                                 value: _position.inMilliseconds /
                                     info.duration.inMilliseconds,
                                 onChanged: (_) {},
-                                year2023: false,
                               ),
                             ),
                           ],
@@ -180,32 +181,6 @@ class _GifCropPageState extends State<GifCropPage> {
     );
   }
 
-  RangeValues _initialRange(Duration duration) {
-    if (duration <= maxAnimatedStickerDuration) return const RangeValues(0, 1);
-    return RangeValues(
-        0, maxAnimatedStickerDuration.inMilliseconds / duration.inMilliseconds);
-  }
-
-  RangeValues _clampRange(RangeValues values, {required bool movedStart}) {
-    final duration = _info!.duration;
-    final maxSpan = min(1.0,
-        maxAnimatedStickerDuration.inMilliseconds / duration.inMilliseconds);
-    var start = values.start.clamp(0.0, 1.0).toDouble();
-    var end = values.end.clamp(0.0, 1.0).toDouble();
-
-    if (end - start > maxSpan) {
-      if (movedStart) {
-        end = min(1.0, start + maxSpan);
-      } else {
-        start = max(0.0, end - maxSpan);
-      }
-    }
-    if (end <= start) {
-      end = min(1.0, start + .001);
-    }
-    return RangeValues(start, end);
-  }
-
   void _tick() {
     final info = _info;
     if (!mounted || info == null) return;
@@ -227,7 +202,7 @@ class _GifCropPageState extends State<GifCropPage> {
     final start = _durationFromFraction(_range.start);
     final end = _durationFromFraction(_range.end);
     final selected = end - start;
-    if (selected <= Duration.zero || selected > maxAnimatedStickerDuration) {
+    if (!isValidAnimatedTrim(selected)) {
       showDialog(
         context: context,
         builder: (context) => ErrorDialog(

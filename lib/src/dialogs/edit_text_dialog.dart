@@ -45,7 +45,7 @@ class _TextEditingDialogState extends State<TextEditingDialog> {
 
   @override
   void initState() {
-    page = FontsRegistry.indexOf(widget.parent.text.fontName);
+    page = max(0, FontsRegistry.indexOf(widget.parent.text.fontName));
     _pageController = PageController(viewportFraction: .25, initialPage: page);
     super.initState();
   }

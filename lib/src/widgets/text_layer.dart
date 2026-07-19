@@ -8,27 +8,24 @@ import 'package:stickers/src/pages/edit_page.dart';
 
 class TextLayer extends StatefulWidget implements EditorLayer {
   final EditorText text;
-  TextLayerState? state;
+  final GlobalKey<TextLayerState> stateKey;
 
   final Function(TextLayer)? onDelete;
 
   final GlobalKey rbKey;
 
-  TextLayer(
+  const TextLayer(
     this.text, {
-    super.key,
+    required this.stateKey,
     this.onDelete,
     required this.rbKey,
-  });
+  }) : super(key: stateKey);
 
   @override
-  State<TextLayer> createState() {
-    state = TextLayerState();
-    return state!;
-  }
+  State<TextLayer> createState() => TextLayerState();
 
   void update(Matrix4 matrix) {
-    state?.update(matrix);
+    stateKey.currentState?.update(matrix);
   }
 }
 

@@ -5,7 +5,11 @@ import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/util.dart';
 
 class CreatePackDialog extends StatefulWidget {
-  CreatePackDialog(this.packs, {this.initialAnimated = false, super.key});
+  const CreatePackDialog(
+    this.packs, {
+    this.initialAnimated = false,
+    super.key,
+  });
 
   final List<StickerPack> packs;
   final bool initialAnimated;

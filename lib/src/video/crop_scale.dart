@@ -1,72 +1,76 @@
 import 'dart:async';
+
 import 'package:flutter/services.dart';
 
 import 'common.dart';
 
-
 class CropAndScaleService {
   static const _methodChannel = MethodChannel('de.loicezt.stickers/methods');
-  static const _eventChannel = EventChannel('de.loicezt.stickers/progress_trim');
+  static const _eventChannel =
+      EventChannel('de.loicezt.stickers/progress_trim');
+  static var _requestSequence = 0;
 
-  // A stream controller to expose a single, unified progress stream
   final _progressController = StreamController<Progress>.broadcast();
+  bool _running = false;
+
   Stream<Progress> get progressStream => _progressController.stream;
 
-  CropAndScaleService() {
-    // Listen to the native event channel as soon as the service is created
-    _eventChannel.receiveBroadcastStream().listen(_onProgress, onError: _onError);
-  }
-
-  void _onProgress(dynamic data) {
-    if (data is Map) {
-      final statusString = data['status'] as String?;
-      final status = Status.values.firstWhere(
-            (e) => e.toString() == 'Status.$statusString',
-        orElse: () => Status.IDLE,
-      );
-
-      final progress = Progress(
-        status: status,
-        progress: (data['progress'] as num?)?.toDouble() ?? 0.0,
-        currentFrame: data['currentFrame'] as int? ?? 0,
-        totalFrames: data['totalFrames'] as int? ?? 0,
-      );
-      _progressController.add(progress);
-    }
-  }
-
-  void _onError(Object error) {
-    print("Error on EventChannel: $error");
-    _progressController.add(Progress(status: Status.FAILED));
-  }
-
-  Future<void> start({
+  Future<void> trim({
     required String inputFile,
     required String outputFile,
     required Duration start,
     required Duration end,
   }) async {
+    if (_running) throw StateError('Another video trim is running.');
+    _running = true;
+    final requestId =
+        '${DateTime.now().microsecondsSinceEpoch}_${_requestSequence++}';
+    final completion = Completer<void>();
+    late final StreamSubscription<Object?> subscription;
+    subscription = _eventChannel.receiveBroadcastStream().listen(
+      (data) {
+        if (data is! Map || data['requestId'] != requestId) return;
+        final progress = _parseProgress(data);
+        _progressController.add(progress);
+        if (progress.status == Status.success && !completion.isCompleted) {
+          completion.complete();
+        } else if ((progress.status == Status.failed ||
+                progress.status == Status.cancelled) &&
+            !completion.isCompleted) {
+          completion.completeError(StateError('Video trimming failed.'));
+        }
+      },
+      onError: (Object error) {
+        if (!completion.isCompleted) completion.completeError(error);
+      },
+    );
+
     try {
-      await _methodChannel.invokeMethod('startTrim', {
+      await _methodChannel.invokeMethod<void>('startTrim', {
+        'requestId': requestId,
         'inputFile': inputFile,
         'outputFile': outputFile,
-        'startTimeUs': start.inMicroseconds.toString(),
-        'endTimeUs': end.inMicroseconds.toString(),
+        'startTimeUs': start.inMicroseconds,
+        'endTimeUs': end.inMicroseconds,
       });
-    } on PlatformException catch (e) {
-      print("Failed to start transcoding: '${e.message}'.");
+      await completion.future.timeout(const Duration(minutes: 5));
+    } finally {
+      await subscription.cancel();
+      _running = false;
     }
   }
 
-  Future<void> cancel() async {
-    try {
-      await _methodChannel.invokeMethod('cancelTrim');
-    } on PlatformException catch (e) {
-      print("Failed to cancel transcoding: '${e.message}'.");
-    }
-  }
+  Progress _parseProgress(Map<dynamic, dynamic> data) => Progress(
+        status: Status.values.firstWhere(
+          (status) => status.name.toUpperCase() == data['status'],
+          orElse: () => Status.idle,
+        ),
+        progress: (data['progress'] as num?)?.toDouble() ?? 0,
+        currentFrame: (data['currentFrame'] as num?)?.toInt() ?? 0,
+        totalFrames: (data['totalFrames'] as num?)?.toInt() ?? 0,
+      );
 
-  void dispose() {
-    _progressController.close();
-  }
+  Future<void> cancel() => _methodChannel.invokeMethod<void>('cancelTrim');
+
+  Future<void> dispose() => _progressController.close();
 }

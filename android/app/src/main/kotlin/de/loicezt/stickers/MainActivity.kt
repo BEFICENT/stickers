@@ -39,13 +39,28 @@ class MainActivity : FlutterActivity() {
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "startTrim" -> {
-                    val args = call.arguments as Map<String, String>
-                    val inputFile = File(args["inputFile"]!!)
-                    val outputFile = File(args["outputFile"]!!)
-                    val startTimeUs = args["startTimeUs"]!!.toLong()
-                    val endTimeUs = args["endTimeUs"]!!.toLong()
-                    cropAndScale.start(inputFile, outputFile, startTimeUs, endTimeUs, 24)
-                    result.success(null)
+                    try {
+                        val args = call.arguments as Map<*, *>
+                        val inputFile = File(args["inputFile"]!! as String)
+                        val outputFile = File(args["outputFile"]!! as String)
+                        val startTimeUs = (args["startTimeUs"]!! as Number).toLong()
+                        val endTimeUs = (args["endTimeUs"]!! as Number).toLong()
+                        cropAndScale.start(
+                            args["requestId"]!! as String,
+                            inputFile,
+                            outputFile,
+                            startTimeUs,
+                            endTimeUs,
+                            24
+                        )
+                        result.success(null)
+                    } catch (e: Exception) {
+                        result.error(
+                            "TRIM_START_FAILED",
+                            e.message ?: "Could not start video trimming.",
+                            null
+                        )
+                    }
                 }
 
                 "startOverlay" -> {
@@ -59,17 +74,18 @@ class MainActivity : FlutterActivity() {
                         val overlayFile = File(args["overlayFile"]!! as String)
                         val outputFile = File(args["outputFile"]!! as String)
                         overlayAndEncode.start(
+                            args["requestId"]!! as String,
                             videoFile,
                             overlayFile,
                             outputFile,
                             WebPConfig.fromMap(args["config"]!! as Map<*, *>),
-                            args["fps"]!! as Int
+                            (args["fps"]!! as Number).toInt()
                         )
                         result.success(null)
-                    } catch (e: NullPointerException) {
+                    } catch (e: Exception) {
                         result.error(
-                            "MISSING_ARGUMENT",
-                            "Missing a required file path argument.",
+                            "ENCODE_START_FAILED",
+                            e.message ?: "Could not start animated export.",
                             null
                         )
                     }
@@ -86,19 +102,20 @@ class MainActivity : FlutterActivity() {
                         val overlayFile = File(args["overlayFile"]!! as String)
                         val outputFile = File(args["outputFile"]!! as String)
                         overlayAndEncode.startGif(
+                            args["requestId"]!! as String,
                             gifFile,
                             overlayFile,
                             outputFile,
                             (args["startMs"]!! as Number).toInt(),
                             (args["endMs"]!! as Number).toInt(),
                             WebPConfig.fromMap(args["config"]!! as Map<*, *>),
-                            args["fps"]!! as Int
+                            (args["fps"]!! as Number).toInt()
                         )
                         result.success(null)
-                    } catch (e: NullPointerException) {
+                    } catch (e: Exception) {
                         result.error(
-                            "MISSING_ARGUMENT",
-                            "Missing a required GIF overlay argument.",
+                            "ENCODE_START_FAILED",
+                            e.message ?: "Could not start GIF export.",
                             null
                         )
                     }
@@ -131,8 +148,13 @@ class MainActivity : FlutterActivity() {
                     // Combine both state and progress flows into a single stream
                     eventScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
                     eventScope?.launch {
-                        cropAndScale.status.combine(cropAndScale.progress) { status, progress ->
+                        combine(
+                            cropAndScale.status,
+                            cropAndScale.progress,
+                            cropAndScale.requestId
+                        ) { status, progress, requestId ->
                             mapOf(
+                                "requestId" to requestId,
                                 "status" to status.name,
                                 "progress" to progress.progress,
                                 "currentFrame" to progress.currentFrame,
@@ -162,8 +184,13 @@ class MainActivity : FlutterActivity() {
 
                     eventScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
                     eventScope?.launch {
-                        overlayAndEncode.status.combine(overlayAndEncode.progress) { status, progress ->
+                        combine(
+                            overlayAndEncode.status,
+                            overlayAndEncode.progress,
+                            overlayAndEncode.requestId
+                        ) { status, progress, requestId ->
                             mapOf(
+                                "requestId" to requestId,
                                 "status" to status.name,
                                 "progress" to progress.progress,
                                 "currentFrame" to progress.currentFrame,
@@ -186,6 +213,7 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         super.onDestroy()
         cropAndScale.release()
+        overlayAndEncode.release()
         scope.cancel()
     }
 }

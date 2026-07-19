@@ -11,6 +11,7 @@ import 'package:stickers/src/batch/batch_import_queue.dart';
 import 'package:stickers/src/checker_painter.dart';
 import 'package:stickers/src/constants.dart';
 import 'package:stickers/src/data/load_store.dart';
+import 'package:stickers/src/data/pack_validator.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/dialogs/confirm_leave_dialog.dart';
 import 'package:stickers/src/dialogs/edit_text_dialog.dart';
@@ -18,6 +19,8 @@ import 'package:stickers/src/dialogs/error_dialog.dart';
 import 'package:stickers/src/dialogs/eyedropper_dialog.dart';
 import 'package:stickers/src/fonts_api/fonts_registry.dart';
 import 'package:stickers/src/globals.dart';
+import 'package:stickers/src/media/animated_export_policy.dart';
+import 'package:stickers/src/media/animated_trim.dart';
 import 'package:stickers/src/pages/crop_page.dart';
 import 'package:stickers/src/pages/default_page.dart';
 import 'package:stickers/src/pages/gif_crop_page.dart';
@@ -74,7 +77,6 @@ class _EditPageState extends State<EditPage> {
 
   /// The sticker is 512x512 as opposed to the canvas, which is why we need a scale factor
   double scaleFactor = 0;
-  final List<EditorText> _texts = [];
   final List<EditorLayer> _layers = [];
 
   TextLayer? _currentTextLayer;
@@ -92,6 +94,7 @@ class _EditPageState extends State<EditPage> {
       _controller.setLooping(true);
       _controller.setVolume(0);
       _controller.initialize().then((_) {
+        if (!mounted) return;
         _controller.play();
         setState(() {});
       });
@@ -102,6 +105,12 @@ class _EditPageState extends State<EditPage> {
   final GlobalKey _rbKey = GlobalKey();
   bool _exporting = false;
   late VideoPlayerController _controller;
+
+  @override
+  void dispose() {
+    if (widget.mediaType == MediaType.video) _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -266,10 +275,11 @@ class _EditPageState extends State<EditPage> {
                           transform: Matrix4.identity(),
                           fontSize: 40,
                           textColor: Colors.white,
+                          fontName: "sans-serif",
                         );
-                        _texts.add(text);
                         _layers.add(TextLayer(
                           text,
+                          stateKey: GlobalKey<TextLayerState>(),
                           rbKey: _rbKey,
                           onDelete: (layer) {
                             _layers.remove(layer);
@@ -382,7 +392,6 @@ class _EditPageState extends State<EditPage> {
                                           height: 64,
                                           width: 64,
                                           child: CircularProgressIndicator(
-                                            year2023: false,
                                             value: _exportProgress,
                                           ),
                                         ),
@@ -544,19 +553,33 @@ class _EditPageState extends State<EditPage> {
       _exporting = true;
     });
     try {
+      if (scaleFactor <= 0) {
+        throw Exception("The sticker editor is not ready yet.");
+      }
       final option = ImageEditorOption();
       for (EditorLayer layer in _layers) {
         final Option layerOption;
         if (layer is TextLayer) {
           layerOption = AddTextOption();
-          final transform = layer.text.transform.storage;
+          final exportTransform = Matrix4.copy(layer.text.transform);
+          final transform = exportTransform.storage;
           transform[12] = transform[12] / scaleFactor;
           transform[13] = transform[13] / scaleFactor;
-          layer.text.fontSize /= scaleFactor;
-          layer.text.outlineWidth /= scaleFactor;
-          layer.text.fontSize *=
-              FontsRegistry.sizeMultiplier(layer.text.fontName) ?? 1;
-          (layerOption as AddTextOption).addText(layer.text);
+          final fontName = layer.text.fontName;
+          final exportText = EditorText(
+            text: layer.text.text,
+            transform: exportTransform,
+            fontSize: layer.text.fontSize /
+                scaleFactor *
+                (FontsRegistry.sizeMultiplier(fontName) ?? 1),
+            textColor: layer.text.textColor,
+            fontName: fontName == "sans-serif" || fontName == "monospace"
+                ? ""
+                : fontName,
+            outlineColor: layer.text.outlineColor,
+            outlineWidth: layer.text.outlineWidth / scaleFactor,
+          );
+          (layerOption as AddTextOption).addText(exportText);
         } else if (layer is DrawLayer) {
           layerOption = layer.drawOption;
         } else {
@@ -591,18 +614,11 @@ class _EditPageState extends State<EditPage> {
             });
       }
     } finally {
-      //This is useless if the screen goes away but useful for debugging
-      for (EditorText text in _texts) {
-        final transform = text.transform.storage;
-        transform[12] = transform[12] * scaleFactor;
-        transform[13] = transform[13] * scaleFactor;
-        text.fontSize *= scaleFactor;
-        text.outlineWidth *= scaleFactor;
-        text.fontSize /= FontsRegistry.sizeMultiplier(text.fontName) ?? 1;
-      }
       if (mounted) {
         setState(() {
           _exporting = false;
+          _message = null;
+          _exportProgress = null;
         });
       }
     }
@@ -661,10 +677,17 @@ class _EditPageState extends State<EditPage> {
     if (widget.mediaType == MediaType.gif) {
       final trimEnd = widget.trimEnd ?? maxAnimatedStickerDuration;
       final selected = trimEnd - widget.trimStart;
-      if (selected <= Duration.zero || selected > maxAnimatedStickerDuration) {
+      if (!isValidAnimatedTrim(selected)) {
         throw Exception(
             AppLocalizations.of(context)!.animatedDurationLimitMessage);
       }
+    }
+    if (widget.mediaType == MediaType.video &&
+        _controller.value.isInitialized &&
+        _controller.value.duration > maxAnimatedStickerDuration) {
+      throw Exception(
+        AppLocalizations.of(context)!.animatedDurationLimitMessage,
+      );
     }
     final transparent = await rootBundle.load("assets/transparent.webp");
     final out = await ImageEditor.editImageAndGetFile(
@@ -674,10 +697,9 @@ class _EditPageState extends State<EditPage> {
         "$mediaCacheDir/exported_${DateTime.now().millisecondsSinceEpoch}.webp");
     Stopwatch sw = Stopwatch()..start();
     Uint8List? data;
-    double quality = 60;
-    int fps = 24;
+    var settings = const AnimatedExportSettings(quality: 60, fps: 24);
 
-    for (int attempt = 0; attempt < 3; attempt++) {
+    for (int attempt = 0; attempt < animatedExportAttempts; attempt++) {
       if (context.mounted) {
         switch (attempt) {
           case 0:
@@ -688,92 +710,58 @@ class _EditPageState extends State<EditPage> {
             _message = AppLocalizations.of(context)!.thirdAttempt;
         }
       }
+      if (!mounted) throw const AnimatedEncodeException('Editor was closed.');
       setState(() {});
       var config = WebPConfig(
         lossless: false,
-        quality: quality,
+        quality: settings.quality,
         alphaCompression: 1,
         method: 4,
       );
       if (widget.mediaType == MediaType.gif) {
         final trimEnd = widget.trimEnd ?? maxAnimatedStickerDuration;
-        await service.startGif(
+        await service.encodeGif(
           gifFile: _source.path,
           overlayFile: out.path,
           outputFile: output.path,
           start: widget.trimStart,
           end: trimEnd,
           config: config,
-          fps: fps,
+          fps: settings.fps,
+          onProgress: _onExportProgress,
         );
       } else {
-        await service.start(
+        await service.encodeVideo(
           videoFile: _source.path,
           overlayFile: out.path,
           outputFile: output.path,
           config: config,
-          fps: fps,
+          fps: settings.fps,
+          onProgress: _onExportProgress,
         );
-      }
-      await for (final update in service.progressStream) {
-        if (update.status == Status.SUCCESS) {
-          break;
-        } else if (update.status == Status.RUNNING) {
-          _exportProgress = update.progress;
-          setState(() {});
-        } else if (update.status == Status.FAILED) {
-          if (context.mounted) {
-            showDialog(
-              context: context,
-              builder: (context) {
-                return ErrorDialog(
-                  title: AppLocalizations.of(context)!.exportWebpFailed,
-                  message: AppLocalizations.of(context)!.exportWebpFailedMsg,
-                );
-              },
-            );
-          }
-          throw Exception("Exporting to WebP failed");
-        }
       }
       print("Exported WebP in ${sw.elapsedMilliseconds}ms");
       data = await output.readAsBytes();
       print("Output size: ${data.lengthInBytes / 1024}kiB");
-      if (data.lengthInBytes / 1024 < 500) {
+      if (animatedOutputFits(data.lengthInBytes)) {
         break;
       } else {
         print("Result is ${data.lengthInBytes / 500 / 1024} times too big");
-        if (data.lengthInBytes / 1024 > 550) {
-          // If the sticker is really too large, the only solution is to drop frames
-          fps = (fps / (data.lengthInBytes / 1024) * 550).round();
-        }
-        quality -= 20;
-        print("New configuration: q=$quality fps=$fps");
+        settings = settings.afterOversizedResult(data.lengthInBytes);
+        print(
+          "New configuration: q=${settings.quality} fps=${settings.fps}",
+        );
       }
     }
-    if (data!.lengthInBytes / 1024 > 500) {
-      if (!context.mounted) throw Exception();
-      Navigator.of(context).pop();
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(AppLocalizations.of(context)!.stickerTooLarge),
-          content: Text(AppLocalizations.of(context)!.stickerTooLargeMsg),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: Text(
-                AppLocalizations.of(context)!.ok,
-              ),
-            )
-          ],
-        ),
-      );
+    if (data == null || data.lengthInBytes > maxAnimatedStickerBytes) {
       throw Exception("Sticker too large");
     }
     return data;
+  }
+
+  void _onExportProgress(Progress update) {
+    if (!mounted || update.status != Status.running) return;
+    setState(() => _exportProgress = update.progress);
   }
 
   void onMatrixUpdate(Matrix4 translationDeltaMatrix, Matrix4 scaleDeltaMatrix,

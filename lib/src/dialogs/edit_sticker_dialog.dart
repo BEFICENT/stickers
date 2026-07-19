@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:stickers/generated/intl/app_localizations.dart';
 import 'package:stickers/src/checker_painter.dart';
+import 'package:stickers/src/data/load_store.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
 
 class EditStickerDialog extends StatefulWidget {
@@ -79,14 +80,11 @@ class _EditStickerDialogState extends State<EditStickerDialog> {
                       children: [
                         TextButton(
                           onPressed: () async {
-                            Navigator.of(context).pop();
-                            final stickerFile =
-                                File(widget.pack.stickers[widget.index].source);
-                            if (await stickerFile.exists()) {
-                              await stickerFile.delete();
-                            }
-                            widget.pack.stickers.removeAt(widget.index);
-                            await widget.pack.onEdit();
+                            await deleteStickerFromPack(
+                              widget.pack,
+                              widget.index,
+                            );
+                            if (context.mounted) Navigator.of(context).pop();
                           },
                           child: Text(
                             AppLocalizations.of(context)!.deleteSticker,

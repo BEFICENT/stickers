@@ -6,14 +6,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:stickers/generated/intl/app_localizations.dart';
 import 'package:stickers/src/batch/batch_import_queue.dart';
 import 'package:stickers/src/checker_painter.dart';
-import 'package:stickers/src/constants.dart';
 import 'package:stickers/src/data/load_store.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/dialogs/delete_confirm_dialog.dart';
 import 'package:stickers/src/dialogs/edit_pack_dialog.dart';
 import 'package:stickers/src/dialogs/edit_sticker_dialog.dart';
 import 'package:stickers/src/dialogs/error_dialog.dart';
-import 'package:stickers/src/globals.dart';
 import 'package:stickers/src/pages/crop_page.dart';
 import 'package:stickers/src/pages/default_page.dart';
 import 'package:stickers/src/pages/gif_crop_page.dart';
@@ -60,16 +58,9 @@ class StickerPackPageState extends State<StickerPackPage> {
                             DeleteConfirmDialog(widget.pack.title)).then(
                       (value) async {
                         if (value == true) {
-                          packs.remove(widget.pack);
+                          await deletePack(widget.pack);
                           widget.deleteCallback();
-                          if (context.mounted) {
-                            Navigator.of(context).pop();
-                          }
-                          final dir = Directory("$packsDir/${widget.pack.id}");
-                          if (await dir.exists()) {
-                            await dir.delete(recursive: true);
-                          }
-                          await savePacks(packs);
+                          if (context.mounted) Navigator.of(context).pop();
                         }
                       },
                     );

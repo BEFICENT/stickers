@@ -68,6 +68,38 @@ void main() {
         .toList();
     expect(installed, isEmpty);
   });
+
+  test('imports a metadata-less pack shared by WhatsApp', () async {
+    final archive = await _createWhatsAppSharedArchive(temporaryDirectory);
+
+    await importPack(archive);
+
+    expect(globals.packs, hasLength(1));
+    final imported = globals.packs.single;
+    expect(imported.title, 'Imported sticker pack');
+    expect(imported.author, 'Imported from WhatsApp');
+    expect(imported.animated, isFalse);
+    expect(imported.stickers, hasLength(3));
+    expect(imported.trayIcon, isNotNull);
+    expect(await File(imported.trayIcon!).exists(), isTrue);
+    for (var index = 0; index < imported.stickers.length; index++) {
+      final bytes = await File(imported.stickers[index].source).readAsBytes();
+      expect(bytes[23], index);
+    }
+  });
+
+  test('retains legacy wastickers metadata when present', () async {
+    final archive = await _createWhatsAppSharedArchive(
+      temporaryDirectory,
+      title: 'Legacy title',
+      author: 'Legacy author',
+    );
+
+    await importPack(archive);
+
+    expect(globals.packs.single.title, 'Legacy title');
+    expect(globals.packs.single.author, 'Legacy author');
+  });
 }
 
 class _FailingRepository extends PackRepository {
@@ -100,6 +132,41 @@ Future<File> _createPackArchive(
     ..addFile(ArchiveFile.string('pack.json', jsonEncode(document)))
     ..addFile(ArchiveFile('sticker.webp', 30, _staticWebP()));
   final file = File('${directory.path}/pack.zip');
+  final output = OutputFileStream(file.path);
+  ZipEncoder().encode(archive, output: output);
+  await output.close();
+  return file;
+}
+
+Future<File> _createWhatsAppSharedArchive(
+  Directory directory, {
+  String? title,
+  String? author,
+}) async {
+  final archive = Archive();
+  for (final index in [2, 0, 1]) {
+    final sticker = _staticWebP()..[23] = index;
+    archive.addFile(
+      ArchiveFile(
+        '${index.toString().padLeft(2, '0')}_content.webp',
+        sticker.length,
+        sticker,
+      ),
+    );
+  }
+  archive.addFile(
+    ArchiveFile(
+      'provider pack.png',
+      8,
+      Uint8List.fromList(const [137, 80, 78, 71, 13, 10, 26, 10]),
+    ),
+  );
+  if (title != null) archive.addFile(ArchiveFile.string('title.txt', title));
+  if (author != null) {
+    archive.addFile(ArchiveFile.string('author.txt', author));
+  }
+
+  final file = File('${directory.path}/shared.wastickers');
   final output = OutputFileStream(file.path);
   ZipEncoder().encode(archive, output: output);
   await output.close();

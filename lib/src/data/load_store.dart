@@ -99,28 +99,7 @@ Future<List<StickerPack>> _parseImportedPacks(
 ) async {
   switch (path.extension(archive.path).toLowerCase()) {
     case ".wastickers":
-      final contents = await unzipDir.list().toList();
-      return [
-        StickerPack(
-          (await File("${unzipDir.path}/title.txt").readAsString()).trim(),
-          (await File("${unzipDir.path}/author.txt").readAsString()).trim(),
-          "imported",
-          contents
-              .whereType<File>()
-              .where(
-                  (file) => path.extension(file.path).toLowerCase() == ".webp")
-              .map((file) => Sticker(file.path, ["❤"]))
-              .toList(),
-          "1000",
-          false,
-          trayIcon: contents
-              .whereType<File>()
-              .where(
-                  (file) => path.extension(file.path).toLowerCase() == ".png")
-              .firstOrNull
-              ?.path,
-        ),
-      ];
+      return [await _parseWastickersPack(unzipDir)];
     case ".stickify":
       final result = <StickerPack>[];
       await for (final entity in unzipDir.list()) {
@@ -178,6 +157,41 @@ Future<List<StickerPack>> _parseImportedPacks(
       }
       return [pack];
   }
+}
+
+Future<StickerPack> _parseWastickersPack(Directory unzipDir) async {
+  final contents = await unzipDir.list(followLinks: false).toList();
+  final stickerFiles = contents
+      .whereType<File>()
+      .where((file) => path.extension(file.path).toLowerCase() == ".webp")
+      .toList()
+    ..sort((left, right) =>
+        path.basename(left.path).compareTo(path.basename(right.path)));
+  final trayIcon = contents
+      .whereType<File>()
+      .where((file) => path.extension(file.path).toLowerCase() == ".png")
+      .firstOrNull;
+
+  return StickerPack(
+    await _readOptionalImportText(
+            File(path.join(unzipDir.path, "title.txt"))) ??
+        "Imported sticker pack",
+    await _readOptionalImportText(
+          File(path.join(unzipDir.path, "author.txt")),
+        ) ??
+        "Imported from WhatsApp",
+    "imported",
+    stickerFiles.map((file) => Sticker(file.path, ["❤"])).toList(),
+    "1000",
+    false,
+    trayIcon: trayIcon?.path,
+  );
+}
+
+Future<String?> _readOptionalImportText(File file) async {
+  if (!await file.exists()) return null;
+  final value = (await file.readAsString()).trim();
+  return value.isEmpty ? null : value;
 }
 
 Future<void> _installImportedPacks(

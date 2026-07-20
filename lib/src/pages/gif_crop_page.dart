@@ -8,6 +8,7 @@ import 'package:stickers/src/constants.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/dialogs/error_dialog.dart';
 import 'package:stickers/src/gif/gif_info.dart';
+import 'package:stickers/src/gif/gif_trim_preview.dart';
 import 'package:stickers/src/media/animated_trim.dart';
 import 'package:stickers/src/navigation/edit_arguments.dart';
 import 'package:stickers/src/pages/default_page.dart';
@@ -38,6 +39,9 @@ class _GifCropPageState extends State<GifCropPage> {
   Duration _position = Duration.zero;
   Timer? _timer;
   bool _loading = true;
+  bool _positionRequestInFlight = false;
+  final GifTrimPreviewController _previewController =
+      GifTrimPreviewController();
 
   @override
   void initState() {
@@ -97,11 +101,12 @@ class _GifCropPageState extends State<GifCropPage> {
                     child: Container(
                       clipBehavior: Clip.antiAlias,
                       decoration: const BoxDecoration(),
-                      child: Center(
-                        child: Image.file(
-                          File(widget.imagePath),
-                          fit: BoxFit.contain,
-                          gaplessPlayback: true,
+                      child: SizedBox.expand(
+                        child: GifTrimPreview(
+                          gifPath: widget.imagePath,
+                          start: _durationFromFraction(_range.start),
+                          end: _durationFromFraction(_range.end),
+                          controller: _previewController,
                         ),
                       ),
                     ),
@@ -181,16 +186,21 @@ class _GifCropPageState extends State<GifCropPage> {
     );
   }
 
-  void _tick() {
+  Future<void> _tick() async {
     final info = _info;
-    if (!mounted || info == null) return;
+    if (!mounted || info == null || _positionRequestInFlight) return;
     final start = _durationFromFraction(_range.start);
     final end = _durationFromFraction(_range.end);
-    var next = _position + const Duration(milliseconds: 100);
-    if (next >= end) next = start;
-    setState(() {
-      _position = next;
-    });
+    _positionRequestInFlight = true;
+    try {
+      final position = await _previewController.position();
+      if (!mounted || position == null) return;
+      setState(() {
+        _position = position < start || position >= end ? start : position;
+      });
+    } finally {
+      _positionRequestInFlight = false;
+    }
   }
 
   Duration _durationFromFraction(double value) {

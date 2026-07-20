@@ -1,5 +1,7 @@
 package de.loicezt.stickers
 
+import de.loicezt.stickers.gif.GIF_PREVIEW_VIEW_TYPE
+import de.loicezt.stickers.gif.GifPreviewViewFactory
 import de.loicezt.stickers.video.CropAndScale
 import de.loicezt.stickers.video.GifOverlayRequest
 import de.loicezt.stickers.video.OverlayAndEncode
@@ -33,6 +35,10 @@ class MainActivity : FlutterActivity() {
 
         cropAndScale = CropAndScale()
         overlayAndEncode = OverlayAndEncode()
+        flutterEngine.platformViewsController.registry.registerViewFactory(
+            GIF_PREVIEW_VIEW_TYPE,
+            GifPreviewViewFactory(flutterEngine.dartExecutor.binaryMessenger)
+        )
 
         // 1. Setup the MethodChannel to receive commands from Flutter
         MethodChannel(

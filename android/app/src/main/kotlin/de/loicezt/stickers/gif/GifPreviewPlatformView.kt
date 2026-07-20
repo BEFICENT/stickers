@@ -114,7 +114,7 @@ private class GifPreviewPlatformView(
         positionMs = initialRange.startMs
 
         imageView.setBackgroundColor(Color.TRANSPARENT)
-        imageView.scaleType = ImageView.ScaleType.CENTER_INSIDE
+        imageView.scaleType = ImageView.ScaleType.FIT_CENTER
         drawable.stop()
         imageView.setImageDrawable(drawable)
 

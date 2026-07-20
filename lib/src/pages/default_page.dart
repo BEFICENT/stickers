@@ -24,7 +24,11 @@ import 'package:stickers/generated/intl/app_localizations.dart';
 /// Having a widget with all the common parts makes it easier to modify later.
 class DefaultActivity extends StatelessWidget {
   const DefaultActivity(
-      {super.key, required this.child, this.appBar, this.fab, this.resizeToAvoidBottomInset});
+      {super.key,
+      required this.child,
+      this.appBar,
+      this.fab,
+      this.resizeToAvoidBottomInset});
 
   final Widget child;
   final bool? resizeToAvoidBottomInset;

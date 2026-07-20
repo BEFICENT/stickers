@@ -9,7 +9,7 @@ import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/dialogs/error_dialog.dart';
 import 'package:stickers/src/gif/gif_info.dart';
 import 'package:stickers/src/media/animated_trim.dart';
-import 'package:stickers/src/pages/crop_page.dart';
+import 'package:stickers/src/navigation/edit_arguments.dart';
 import 'package:stickers/src/pages/default_page.dart';
 
 class GifCropPage extends StatefulWidget {

@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:stickers/generated/intl/app_localizations.dart';
+import 'package:stickers/src/constants.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/dialogs/error_dialog.dart';
 import 'package:stickers/src/globals.dart';
+import 'package:stickers/src/integrations/whatsapp_pack_service.dart';
 import 'package:whatsapp_stickers_plus/exceptions.dart';
 
 bool isValidURL(String input) {
@@ -28,9 +32,12 @@ String? authorValidator(String? value, BuildContext context) {
   return null;
 }
 
-Future<void> sendToWhatsappWithErrorHandling(StickerPack pack, BuildContext context) async {
+Future<void> sendToWhatsappWithErrorHandling(
+    StickerPack pack, BuildContext context) async {
   try {
-    await pack.sendToWhatsapp();
+    await WhatsappPackService(
+      workingDirectory: Directory(mediaCacheDir),
+    ).send(pack);
   } on WhatsappStickersAlreadyAddedException catch (_) {
   } on WhatsappStickersException catch (e) {
     showDialog(
@@ -50,13 +57,16 @@ Future<void> sendToWhatsappWithErrorHandling(StickerPack pack, BuildContext cont
     } else {
       showDialog(
           context: navigatorKey.currentContext!,
-          builder: (_) =>
-              ErrorDialog(title: AppLocalizations.of(context)!.couldnTAddStickerPack, message: e.message ?? ""));
+          builder: (_) => ErrorDialog(
+              title: AppLocalizations.of(context)!.couldnTAddStickerPack,
+              message: e.message ?? ""));
     }
   } on Exception catch (e) {
     showDialog(
         context: navigatorKey.currentContext!,
-        builder: (_) => ErrorDialog(title: AppLocalizations.of(context)!.couldnTAddStickerPack, message: e.toString()));
+        builder: (_) => ErrorDialog(
+            title: AppLocalizations.of(context)!.couldnTAddStickerPack,
+            message: e.toString()));
   }
 }
 
@@ -69,4 +79,3 @@ int colCount(double width) {
     return 9;
   }
 }
-

@@ -29,7 +29,10 @@ class GoogleFontsSearchDelegate extends SearchDelegate<WebFont> {
 
   @override
   Widget buildResults(BuildContext context) {
-    final searchResults = fonts.where((font) => font.family.toLowerCase().contains(query.toLowerCase())).toList();
+    final searchResults = fonts
+        .where(
+            (font) => font.family.toLowerCase().contains(query.toLowerCase()))
+        .toList();
     return ListView.separated(
       padding: EdgeInsets.only(top: 12),
       itemCount: searchResults.length,

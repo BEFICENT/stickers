@@ -1,0 +1,9 @@
+Stickers is derived from the GPL-3.0 project originally published at:
+https://github.com/lolocomotive/stickers
+
+This fork is independently maintained and is not represented as an official
+release of the original project. Original copyright notices and repository
+history are retained. The complete project remains licensed under GPL-3.0.
+
+Third-party components retain their respective licenses. See
+docs/third_party.md for the maintained dependency inventory.

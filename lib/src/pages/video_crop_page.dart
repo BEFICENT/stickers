@@ -9,7 +9,7 @@ import 'package:stickers/src/constants.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/dialogs/error_dialog.dart';
 import 'package:stickers/src/media/animated_trim.dart';
-import 'package:stickers/src/pages/crop_page.dart';
+import 'package:stickers/src/navigation/edit_arguments.dart';
 import 'package:stickers/src/pages/default_page.dart';
 import 'package:stickers/src/video/crop_scale.dart';
 import 'package:video_player/video_player.dart';

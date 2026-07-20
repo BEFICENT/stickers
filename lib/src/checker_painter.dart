@@ -14,7 +14,8 @@ class CheckerPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (sizeCallback != null) sizeCallback!(size);
-    checkerPainter(canvas, Rect.fromLTWH(0, 0, size.width, size.height), context, fg, bg);
+    checkerPainter(
+        canvas, Rect.fromLTWH(0, 0, size.width, size.height), context, fg, bg);
   }
 
   @override
@@ -22,14 +23,21 @@ class CheckerPainter extends CustomPainter {
     return true;
   }
 
-  static void checkerPainter(Canvas canvas, Rect rect, BuildContext context, [Color? bg, Color? fg]) {
+  static void checkerPainter(Canvas canvas, Rect rect, BuildContext context,
+      [Color? bg, Color? fg]) {
     // Paint a checkerboard below the image to indicate transparency
-    fg = fg ?? (Theme.of(context).brightness == Brightness.light
-        ? Color.lerp(Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.surface, .8)
-        : Color.lerp(Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.surface, .9));
-    bg = bg ?? (Theme.of(context).brightness == Brightness.light
-            ? Color.lerp(Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.surface, .9)
-            : Color.lerp(Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.surface, .95));
+    fg = fg ??
+        (Theme.of(context).brightness == Brightness.light
+            ? Color.lerp(Theme.of(context).colorScheme.primary,
+                Theme.of(context).colorScheme.surface, .8)
+            : Color.lerp(Theme.of(context).colorScheme.primary,
+                Theme.of(context).colorScheme.surface, .9));
+    bg = bg ??
+        (Theme.of(context).brightness == Brightness.light
+            ? Color.lerp(Theme.of(context).colorScheme.primary,
+                Theme.of(context).colorScheme.surface, .9)
+            : Color.lerp(Theme.of(context).colorScheme.primary,
+                Theme.of(context).colorScheme.surface, .95));
 
     double size = 10;
     final checkerPaint = Paint();

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:stickers/generated/intl/app_localizations.dart';
 import 'package:stickers/src/constants.dart';
 import 'package:stickers/src/data/load_store.dart';
+import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/dialogs/create_pack_dialog.dart';
 import 'package:stickers/src/dialogs/error_dialog.dart';
 import 'package:stickers/src/globals.dart';
@@ -76,7 +77,8 @@ class StickerPacksPageState extends State<StickerPacksPage> {
                   showDialog(
                       context: context,
                       builder: (context) => ErrorDialog(
-                          title: AppLocalizations.of(context)!.couldntImportPack,
+                          title:
+                              AppLocalizations.of(context)!.couldntImportPack,
                           message: AppLocalizations.of(context)!.checkPack));
                 }
               }
@@ -88,15 +90,27 @@ class StickerPacksPageState extends State<StickerPacksPage> {
             width: 8,
           ),
           FloatingActionButton.extended(
+            key: const Key('create-pack-button'),
             heroTag: "create_fab",
             backgroundColor: Theme.of(context).colorScheme.primary,
-            onPressed: () {
-              showDialog(context: context, builder: (_) => CreatePackDialog(packs)).then(
-                (_) async {
-                  await savePacks(packs);
-                  if (mounted) setState(() {});
-                },
+            onPressed: () async {
+              final pack = await showDialog<StickerPack>(
+                context: context,
+                builder: (_) => const CreatePackDialog(),
               );
+              if (pack == null) return;
+              try {
+                await createPack(pack);
+              } on Exception catch (error) {
+                if (!context.mounted) return;
+                showDialog(
+                  context: context,
+                  builder: (_) => ErrorDialog(
+                    title: AppLocalizations.of(context)!.importError,
+                    message: error.toString(),
+                  ),
+                );
+              }
             },
             icon: Icon(
               Icons.add,
@@ -123,7 +137,8 @@ class StickerPacksPageState extends State<StickerPacksPage> {
                   Opacity(
                     opacity: .8,
                     child: Text(
-                      AppLocalizations.of(context)!.clickOnTheBottomRightToAddAStickerPack,
+                      AppLocalizations.of(context)!
+                          .clickOnTheBottomRightToAddAStickerPack,
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -132,7 +147,8 @@ class StickerPacksPageState extends State<StickerPacksPage> {
             )
           : ListView.separated(
               separatorBuilder: (context, index) => Container(),
-              itemBuilder: (context, index) => StickerPackPreviewCard(packs[index], () {
+              itemBuilder: (context, index) =>
+                  StickerPackPreviewCard(packs[index], () {
                 setState(() {});
               }),
               itemCount: packs.length,

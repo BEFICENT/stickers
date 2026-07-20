@@ -95,6 +95,25 @@ void main() {
     expect(repository.load, throwsA(isA<PackRepositoryException>()));
   });
 
+  test('rejects a nonnumeric image data version', () async {
+    await repository.root.create(recursive: true);
+    await repository.metadataFile.writeAsString(jsonEncode({
+      'schemaVersion': PackRepository.schemaVersion,
+      'packs': [
+        {
+          'id': 'invalid-version',
+          'title': 'Invalid',
+          'author': 'Author',
+          'imageDataVersion': 'next',
+          'animated': false,
+          'stickers': <Object?>[],
+        }
+      ],
+    }));
+
+    expect(repository.load, throwsA(isA<PackRepositoryException>()));
+  });
+
   test('serializes overlapping saves in invocation order', () async {
     final first = repository.save([
       StickerPack('First', 'Author', 'first', [], '1', false),

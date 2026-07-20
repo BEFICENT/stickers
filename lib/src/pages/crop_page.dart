@@ -9,6 +9,7 @@ import 'package:stickers/src/batch/batch_import_queue.dart';
 import 'package:stickers/src/checker_painter.dart';
 import 'package:stickers/src/data/load_store.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
+import 'package:stickers/src/navigation/edit_arguments.dart';
 import 'package:stickers/src/pages/default_page.dart';
 
 class CropPage extends StatefulWidget {
@@ -279,31 +280,4 @@ class _CropPageState extends State<CropPage> with TickerProviderStateMixin {
       ),
     );
   }
-}
-
-enum MediaType {
-  video,
-  picture,
-  gif,
-}
-
-class EditArguments {
-  StickerPack pack;
-
-  // Index 30 is tray icon
-  int index;
-  String mediaPath;
-  MediaType type;
-  Duration trimStart;
-  Duration? trimEnd;
-  BatchImportQueue? batchQueue;
-
-  EditArguments(
-      {required this.pack,
-      required this.index,
-      required this.mediaPath,
-      this.type = MediaType.picture,
-      this.trimStart = Duration.zero,
-      this.trimEnd,
-      this.batchQueue});
 }

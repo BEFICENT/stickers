@@ -99,9 +99,11 @@ class _EditStickerDialogState extends State<EditStickerDialog> {
                                       false) {
                                     return;
                                   }
-                                  widget.pack.stickers[widget.index].emojis =
-                                      controller.value.text.characters.toList();
-                                  await widget.pack.onEdit();
+                                  await updateStickerEmojis(
+                                    widget.pack,
+                                    widget.index,
+                                    controller.value.text.characters.toList(),
+                                  );
                                   if (context.mounted) {
                                     Navigator.of(context).pop();
                                   }

@@ -35,7 +35,8 @@ class _FontsSearchPageState extends State<FontsSearchPage> {
                     onPressed: () {
                       showSearch(
                           context: context,
-                          delegate: GoogleFontsSearchDelegate(snapshot.data!.items));
+                          delegate:
+                              GoogleFontsSearchDelegate(snapshot.data!.items));
                     },
                     icon: Icon(Icons.search));
               }
@@ -121,25 +122,30 @@ class _GoogleFontPreviewState extends State<GoogleFontPreview> {
                 children: [
                   ListTile(
                     subtitle: inRegistry
-                        ? Center(child: Text(AppLocalizations.of(context)!.alreadyDownloaded))
+                        ? Center(
+                            child: Text(AppLocalizations.of(context)!
+                                .alreadyDownloaded))
                         : (asyncSnapshot.hasError
                             ? Center(
-                                child: Text(AppLocalizations.of(context)!.errorDownloadingPreview))
+                                child: Text(AppLocalizations.of(context)!
+                                    .errorDownloadingPreview))
                             : null),
                     onTap: inRegistry
                         ? null
                         : () async {
                             await showDialog(
                               context: context,
-                              builder: (context) => DownloadFontDialog(widget: widget),
+                              builder: (context) =>
+                                  DownloadFontDialog(widget: widget),
                             );
                           },
                     title: Text(
                       widget.font.family,
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontFamily:
-                            inRegistry ? widget.font.family : "${widget.font.family}-PREVIEW",
+                        fontFamily: inRegistry
+                            ? widget.font.family
+                            : "${widget.font.family}-PREVIEW",
                         fontSize: 25,
                       ),
                     ),
@@ -186,7 +192,8 @@ class _DownloadFontDialogState extends State<DownloadFontDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(AppLocalizations.of(context)!.downloadItem(widget.widget.font.family)),
+      title: Text(AppLocalizations.of(context)!
+          .downloadItem(widget.widget.font.family)),
       actions: [
         TextButton(
             onPressed: _loading

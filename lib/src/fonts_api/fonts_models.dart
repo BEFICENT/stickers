@@ -16,6 +16,7 @@ class GoogleFontsReply {
     );
   }
 }
+
 class WebFont {
   final String family;
   final List<String> variants;

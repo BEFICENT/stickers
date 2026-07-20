@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:stickers/generated/intl/app_localizations.dart';
 import 'package:stickers/src/checker_painter.dart';
+import 'package:stickers/src/data/load_store.dart';
+import 'package:stickers/src/data/pack_service.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/dialogs/select_sticker_dialog.dart';
-import 'package:stickers/src/pages/crop_page.dart';
+import 'package:stickers/src/navigation/edit_arguments.dart';
 import 'package:stickers/src/util.dart';
 
 class EditPackDialog extends StatefulWidget {
@@ -170,13 +172,16 @@ class _EditPackDialogState extends State<EditPackDialog> {
         ElevatedButton(
           onPressed: () async {
             if (!_formKey.currentState!.validate()) return;
-            widget.pack.author = _authorController.text;
-            widget.pack.title = _nameController.text;
-            widget.pack.publisherWebsite = _publisherURLController.text;
-            widget.pack.privacyPolicyWebsite = _privacyPolicyURLController.text;
-            widget.pack.licenseAgreementWebsite =
-                _licenseAgreementURLController.text;
-            await widget.pack.onEdit();
+            await updatePack(
+              widget.pack,
+              PackDetails(
+                title: _nameController.text,
+                author: _authorController.text,
+                publisherWebsite: _publisherURLController.text,
+                privacyPolicyWebsite: _privacyPolicyURLController.text,
+                licenseAgreementWebsite: _licenseAgreementURLController.text,
+              ),
+            );
             if (context.mounted) Navigator.of(context).pop();
           },
           child: Text(AppLocalizations.of(context)!.done),
@@ -222,7 +227,7 @@ class TrayIconMethodSelector extends StatelessWidget {
                   context: context,
                   builder: (_) =>
                       SelectStickerDialog(callback: (sticker) async {
-                        await pack.setTray(sticker.source);
+                        await setPackTray(pack, File(sticker.source));
                         if (context.mounted) Navigator.of(context).pop();
                       }));
             },

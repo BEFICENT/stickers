@@ -3,31 +3,26 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:image_editor/image_editor.dart';
 import 'package:matrix_gesture_detector/matrix_gesture_detector.dart';
 import 'package:stickers/generated/intl/app_localizations.dart';
 import 'package:stickers/src/batch/batch_import_queue.dart';
 import 'package:stickers/src/checker_painter.dart';
-import 'package:stickers/src/constants.dart';
 import 'package:stickers/src/data/load_store.dart';
-import 'package:stickers/src/data/pack_validator.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/dialogs/confirm_leave_dialog.dart';
 import 'package:stickers/src/dialogs/edit_text_dialog.dart';
 import 'package:stickers/src/dialogs/error_dialog.dart';
 import 'package:stickers/src/dialogs/eyedropper_dialog.dart';
-import 'package:stickers/src/fonts_api/fonts_registry.dart';
+import 'package:stickers/src/editor/editor_export_service.dart';
+import 'package:stickers/src/editor/editor_layer.dart';
 import 'package:stickers/src/globals.dart';
-import 'package:stickers/src/media/animated_export_policy.dart';
-import 'package:stickers/src/media/animated_trim.dart';
-import 'package:stickers/src/pages/crop_page.dart';
+import 'package:stickers/src/navigation/edit_arguments.dart';
+import 'package:stickers/src/navigation/batch_import_navigation.dart';
+import 'package:stickers/src/navigation/app_routes.dart';
 import 'package:stickers/src/pages/default_page.dart';
-import 'package:stickers/src/pages/gif_crop_page.dart';
 import 'package:stickers/src/pages/sticker_pack_page.dart';
-import 'package:stickers/src/pages/video_crop_page.dart';
 import 'package:stickers/src/video/common.dart';
-import 'package:stickers/src/video/overlay_encode.dart';
 import 'package:stickers/src/widgets/draw_layer.dart';
 import 'package:stickers/src/widgets/text_layer.dart';
 import 'package:vector_math/vector_math_64.dart' hide Colors;
@@ -53,7 +48,7 @@ class EditPage extends StatefulWidget {
     super.key,
   });
 
-  static const routeName = "/edit";
+  static const routeName = AppRoutes.editor;
 
   final MediaType mediaType;
 
@@ -553,65 +548,38 @@ class _EditPageState extends State<EditPage> {
       _exporting = true;
     });
     try {
-      if (scaleFactor <= 0) {
-        throw Exception("The sticker editor is not ready yet.");
-      }
-      final option = ImageEditorOption();
-      for (EditorLayer layer in _layers) {
-        final Option layerOption;
-        if (layer is TextLayer) {
-          layerOption = AddTextOption();
-          final exportTransform = Matrix4.copy(layer.text.transform);
-          final transform = exportTransform.storage;
-          transform[12] = transform[12] / scaleFactor;
-          transform[13] = transform[13] / scaleFactor;
-          final fontName = layer.text.fontName;
-          final exportText = EditorText(
-            text: layer.text.text,
-            transform: exportTransform,
-            fontSize: layer.text.fontSize /
-                scaleFactor *
-                (FontsRegistry.sizeMultiplier(fontName) ?? 1),
-            textColor: layer.text.textColor,
-            fontName: fontName == "sans-serif" || fontName == "monospace"
-                ? ""
-                : fontName,
-            outlineColor: layer.text.outlineColor,
-            outlineWidth: layer.text.outlineWidth / scaleFactor,
-          );
-          (layerOption as AddTextOption).addText(exportText);
-        } else if (layer is DrawLayer) {
-          layerOption = layer.drawOption;
-        } else {
-          throw UnimplementedError();
-        }
-        option.addOption(layerOption);
-      }
-
-      option.outputFormat = const OutputFormat.webp_lossy();
-
-      final Uint8List data;
-      if (widget.mediaType == MediaType.picture) {
-        data = (await ImageEditor.editFileImage(
-            file: _source, imageEditorOption: option))!;
-      } else {
-        data = await exportAnimatedSticker(option, context);
-      }
+      final data = await EditorExportService().export(
+        EditorExportRequest(
+          source: _source,
+          mediaType: widget.mediaType,
+          layers: List.unmodifiable(_layers),
+          scaleFactor: scaleFactor,
+          trimStart: widget.trimStart,
+          trimEnd: widget.trimEnd,
+          videoDuration: widget.mediaType == MediaType.video &&
+                  _controller.value.isInitialized
+              ? _controller.value.duration
+              : null,
+        ),
+        onAttempt: _onExportAttempt,
+        onProgress: _onExportProgress,
+      );
       await addToPack(widget.pack, widget.index, data);
       widget.batchQueue?.onChanged?.call();
       if (!context.mounted) return;
       _advanceBatchOrReturn(context);
+    } on EditorExportException catch (error) {
+      if (mounted) _showExportError(context, error.failure);
     } on Exception catch (e) {
+      debugPrint('Sticker export failed: $e');
       if (mounted) {
         showDialog(
-            context: context,
-            builder: (context) {
-              return ErrorDialog(
-                title: AppLocalizations.of(context)!.couldntExportSticker,
-                message:
-                    AppLocalizations.of(context)!.errorMessage + e.toString(),
-              );
-            });
+          context: context,
+          builder: (context) => ErrorDialog(
+            title: AppLocalizations.of(context)!.couldntExportSticker,
+            message: AppLocalizations.of(context)!.couldntExportSticker,
+          ),
+        );
       }
     } finally {
       if (mounted) {
@@ -639,124 +607,52 @@ class _EditPageState extends State<EditPage> {
     navigator.popUntil((route) =>
         route.settings.name == StickerPackPage.routeName || route.isFirst);
     navigator.pushNamed(
-      _routeForBatchItem(nextItem),
+      BatchImportNavigation.routeFor(nextItem),
       arguments: EditArguments(
         pack: widget.pack,
         index: widget.pack.stickers.length,
         mediaPath: nextItem.path,
-        type: _mediaTypeForBatchItem(nextItem),
+        type: BatchImportNavigation.mediaTypeFor(nextItem),
         batchQueue: queue,
       ),
     );
   }
 
-  String _routeForBatchItem(BatchImportItem item) {
-    switch (item.kind) {
-      case BatchImportMediaKind.picture:
-        return CropPage.routeName;
-      case BatchImportMediaKind.video:
-        return VideoCropPage.routeName;
-      case BatchImportMediaKind.gif:
-        return GifCropPage.routeName;
-    }
+  void _onExportAttempt(int attempt) {
+    if (!mounted) return;
+    final localizations = AppLocalizations.of(context)!;
+    setState(() {
+      _message = switch (attempt) {
+        0 => localizations.firstAttempt,
+        1 => localizations.secondAttempt,
+        _ => localizations.thirdAttempt,
+      };
+    });
   }
 
-  MediaType _mediaTypeForBatchItem(BatchImportItem item) {
-    switch (item.kind) {
-      case BatchImportMediaKind.picture:
-        return MediaType.picture;
-      case BatchImportMediaKind.video:
-        return MediaType.video;
-      case BatchImportMediaKind.gif:
-        return MediaType.gif;
-    }
-  }
-
-  Future<Uint8List> exportAnimatedSticker(
-      ImageEditorOption option, BuildContext context) async {
-    if (widget.mediaType == MediaType.gif) {
-      final trimEnd = widget.trimEnd ?? maxAnimatedStickerDuration;
-      final selected = trimEnd - widget.trimStart;
-      if (!isValidAnimatedTrim(selected)) {
-        throw Exception(
-            AppLocalizations.of(context)!.animatedDurationLimitMessage);
-      }
-    }
-    if (widget.mediaType == MediaType.video &&
-        _controller.value.isInitialized &&
-        _controller.value.duration > maxAnimatedStickerDuration) {
-      throw Exception(
-        AppLocalizations.of(context)!.animatedDurationLimitMessage,
-      );
-    }
-    final transparent = await rootBundle.load("assets/transparent.webp");
-    final out = await ImageEditor.editImageAndGetFile(
-        image: transparent.buffer.asUint8List(), imageEditorOption: option);
-    final service = OverlayAndEncodeService();
-    final output = File(
-        "$mediaCacheDir/exported_${DateTime.now().millisecondsSinceEpoch}.webp");
-    Stopwatch sw = Stopwatch()..start();
-    Uint8List? data;
-    var settings = const AnimatedExportSettings(quality: 60, fps: 24);
-
-    for (int attempt = 0; attempt < animatedExportAttempts; attempt++) {
-      if (context.mounted) {
-        switch (attempt) {
-          case 0:
-            _message = AppLocalizations.of(context)!.firstAttempt;
-          case 1:
-            _message = AppLocalizations.of(context)!.secondAttempt;
-          case 2:
-            _message = AppLocalizations.of(context)!.thirdAttempt;
-        }
-      }
-      if (!mounted) throw const AnimatedEncodeException('Editor was closed.');
-      setState(() {});
-      var config = WebPConfig(
-        lossless: false,
-        quality: settings.quality,
-        alphaCompression: 1,
-        method: 4,
-      );
-      if (widget.mediaType == MediaType.gif) {
-        final trimEnd = widget.trimEnd ?? maxAnimatedStickerDuration;
-        await service.encodeGif(
-          gifFile: _source.path,
-          overlayFile: out.path,
-          outputFile: output.path,
-          start: widget.trimStart,
-          end: trimEnd,
-          config: config,
-          fps: settings.fps,
-          onProgress: _onExportProgress,
-        );
-      } else {
-        await service.encodeVideo(
-          videoFile: _source.path,
-          overlayFile: out.path,
-          outputFile: output.path,
-          config: config,
-          fps: settings.fps,
-          onProgress: _onExportProgress,
-        );
-      }
-      print("Exported WebP in ${sw.elapsedMilliseconds}ms");
-      data = await output.readAsBytes();
-      print("Output size: ${data.lengthInBytes / 1024}kiB");
-      if (animatedOutputFits(data.lengthInBytes)) {
-        break;
-      } else {
-        print("Result is ${data.lengthInBytes / 500 / 1024} times too big");
-        settings = settings.afterOversizedResult(data.lengthInBytes);
-        print(
-          "New configuration: q=${settings.quality} fps=${settings.fps}",
-        );
-      }
-    }
-    if (data == null || data.lengthInBytes > maxAnimatedStickerBytes) {
-      throw Exception("Sticker too large");
-    }
-    return data;
+  void _showExportError(
+    BuildContext context,
+    EditorExportFailure failure,
+  ) {
+    final localizations = AppLocalizations.of(context)!;
+    final tooLarge = failure == EditorExportFailure.outputTooLarge;
+    final message = switch (failure) {
+      EditorExportFailure.durationTooLong =>
+        localizations.animatedDurationLimitMessage,
+      EditorExportFailure.outputTooLarge => localizations.stickerTooLargeMsg,
+      EditorExportFailure.editorNotReady ||
+      EditorExportFailure.renderFailed =>
+        localizations.couldntExportSticker,
+    };
+    showDialog(
+      context: context,
+      builder: (_) => ErrorDialog(
+        title: tooLarge
+            ? localizations.stickerTooLarge
+            : localizations.couldntExportSticker,
+        message: message,
+      ),
+    );
   }
 
   void _onExportProgress(Progress update) {
@@ -835,8 +731,4 @@ class UndoEntry {
   final DrawingPainter painter;
 
   UndoEntry(this.stroke, this.painter);
-}
-
-abstract class EditorLayer extends Widget {
-  const EditorLayer({super.key});
 }

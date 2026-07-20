@@ -61,19 +61,22 @@ class SettingsPage extends StatelessWidget {
                         DropdownMenuItem(
                             value: ThemeMode.system,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
                               child: Text(AppLocalizations.of(context)!.system),
                             )),
                         DropdownMenuItem(
                             value: ThemeMode.light,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
                               child: Text(AppLocalizations.of(context)!.light),
                             )),
                         DropdownMenuItem(
                             value: ThemeMode.dark,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
                               child: Text(AppLocalizations.of(context)!.dark),
                             )),
                       ],
@@ -114,31 +117,36 @@ class SettingsPage extends StatelessWidget {
                         DropdownMenuItem(
                             value: "en",
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
                               child: Text("English"),
                             )),
                         DropdownMenuItem(
                             value: "fr",
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
                               child: Text("Français"),
                             )),
                         DropdownMenuItem(
                             value: "de",
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
                               child: Text("Deutsch"),
                             )),
                         DropdownMenuItem(
                             value: "ru",
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
                               child: Text("Русский"),
                             )),
                       ],
                       onChanged: (value) {
                         if (value == null) return;
-                        StickersApp.of(context)!.setLocale(Locale.fromSubtags(languageCode: value));
+                        StickersApp.of(context)!
+                            .setLocale(Locale.fromSubtags(languageCode: value));
                         controller.updateLocale(value);
                       },
                     ),
@@ -155,9 +163,12 @@ class SettingsPage extends StatelessWidget {
             leading: const Icon(Icons.bolt),
             subtitle: Opacity(
               opacity: .7,
-              child: Text(AppLocalizations.of(context)!.settings_quickmode_description),
+              child: Text(
+                  AppLocalizations.of(context)!.settings_quickmode_description),
             ),
-            trailing: Switch(value: controller.quickMode, onChanged: controller.updateQuickMode),
+            trailing: Switch(
+                value: controller.quickMode,
+                onChanged: controller.updateQuickMode),
           ),
           if (controller.quickMode)
             ListTile(
@@ -168,8 +179,10 @@ class SettingsPage extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text("${AppLocalizations.of(context)!.title}: ${controller.defaultTitle}"),
-                      Text("${AppLocalizations.of(context)!.author}: ${controller.defaultAuthor}")
+                      Text(
+                          "${AppLocalizations.of(context)!.title}: ${controller.defaultTitle}"),
+                      Text(
+                          "${AppLocalizations.of(context)!.author}: ${controller.defaultAuthor}")
                     ],
                   )),
               title: Text(AppLocalizations.of(context)!.quickModeDefaults),
@@ -219,7 +232,8 @@ class SettingsPage extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("${info!.appName} v${info!.version}+${info!.buildNumber}"),
+                        Text(
+                            "${info!.appName} v${info!.version}+${info!.buildNumber}"),
                       ],
                     ),
                   ),
@@ -284,12 +298,16 @@ class CacheUseIndicator extends StatelessWidget {
 
   Future<int> _getCacheSize() async {
     int totalSize = 0;
-    await Directory(cacheDir).list(recursive: true, followLinks: false).forEach((FileSystemEntity entity) {
+    await Directory(cacheDir)
+        .list(recursive: true, followLinks: false)
+        .forEach((FileSystemEntity entity) {
       if (entity is File) {
         totalSize += entity.lengthSync();
       }
     });
-    await (await getTemporaryDirectory()).list(recursive: true, followLinks: false).forEach((FileSystemEntity entity) {
+    await (await getTemporaryDirectory())
+        .list(recursive: true, followLinks: false)
+        .forEach((FileSystemEntity entity) {
       if (entity is File) {
         totalSize += entity.lengthSync();
       }

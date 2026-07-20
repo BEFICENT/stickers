@@ -25,7 +25,8 @@ Future<GoogleFontsReply> getFonts({String? family, String? category}) async {
   File fontsListCache = File("$fontsCacheDir/google_fonts.json");
   if (await fontsListCache.exists()) {
     try {
-      return GoogleFontsReply.fromJson(jsonDecode(await fontsListCache.readAsString()));
+      return GoogleFontsReply.fromJson(
+          jsonDecode(await fontsListCache.readAsString()));
     } on Exception catch (e, st) {
       debugPrint("Couldn't read font list from cache");
       debugPrint(e.toString());
@@ -46,11 +47,13 @@ Future<GoogleFontsReply> getFonts({String? family, String? category}) async {
 double totalDownload = 0;
 
 Future<void> downloadAndRegisterFont(WebFont font) async {
-  final entry = FontsRegistry.get(font.family) ?? FontsRegistryEntry(font.family, FontType.googleFont);
+  final entry = FontsRegistry.get(font.family) ??
+      FontsRegistryEntry(font.family, FontType.googleFont);
   final tmp = await getApplicationDocumentsDirectory();
   await Directory("${tmp.path}/googleFonts").create(recursive: true);
   File dest = File("${tmp.path}/googleFonts/${font.family}.ttf");
-  final result = await get(Uri.parse(font.files["regular"] ?? font.files[font.variants.first]!));
+  final result = await get(
+      Uri.parse(font.files["regular"] ?? font.files[font.variants.first]!));
   await dest.writeAsBytes(result.bodyBytes);
   final loader = FontLoader(font.family);
   loader.addFont(Future.value(ByteData.view(result.bodyBytes.buffer)));
@@ -67,15 +70,16 @@ Future<void> downloadAndRegisterFontPreview(WebFont font) async {
       return;
     }
   }
-  FontsRegistry.put(font.family, FontsRegistryEntry(font.family, FontType.googleFont));
+  FontsRegistry.put(
+      font.family, FontsRegistryEntry(font.family, FontType.googleFont));
 
   // Downloading font files for all of these fonts would use up almost 1GB of data, which is why we only download
   // a preview version of the font, capable of displaying only the font name, cutting the total download down to ~35MB
   // This unfortunately means we have to parse CSS as the official API does not provide this feature.
   // In the flutter engine, this preview font is registered as $family-PREVIEW.
   // In the editor plugin, this preview font is not registered at all.
-  var result = await get(
-      Uri.parse("https://fonts.googleapis.com/css2?family=${font.family}&sort=popularity&text=${font.family}"));
+  var result = await get(Uri.parse(
+      "https://fonts.googleapis.com/css2?family=${font.family}&sort=popularity&text=${font.family}"));
   totalDownload += (result.contentLength ?? 0) / 1000.0;
 
   final regex = RegExp(r"url\((.*?)\)", dotAll: true);

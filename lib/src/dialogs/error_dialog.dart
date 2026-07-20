@@ -11,13 +11,17 @@ class ErrorDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return Theme(
         data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.red, brightness: Theme.of(context).brightness),
+            colorScheme: ColorScheme.fromSeed(
+                seedColor: Colors.red,
+                brightness: Theme.of(context).brightness),
             brightness: Theme.of(context).brightness),
         child: AlertDialog(
           title: Text(title),
           content: Text(message),
           actions: [
-            ElevatedButton(onPressed: () => Navigator.of(context).pop(), child: Text(AppLocalizations.of(context)!.ok))
+            ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(AppLocalizations.of(context)!.ok))
           ],
         ));
   }

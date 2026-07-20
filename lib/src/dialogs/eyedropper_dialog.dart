@@ -29,10 +29,11 @@ class _EyedropperDialogState extends State<EyedropperDialog> {
   }
 
   Future<ui.Image> _getImage() async {
-    final image =
-        await widget.boundary.toImage(pixelRatio: MediaQuery.of(context).devicePixelRatio);
+    final image = await widget.boundary
+        .toImage(pixelRatio: MediaQuery.of(context).devicePixelRatio);
     if (mounted) {
-      _samplePosition = Offset(image.width / 2 / MediaQuery.of(context).devicePixelRatio,
+      _samplePosition = Offset(
+          image.width / 2 / MediaQuery.of(context).devicePixelRatio,
           image.height / 2 / MediaQuery.of(context).devicePixelRatio);
     }
     _decodeImage(image);
@@ -79,8 +80,10 @@ class _EyedropperDialogState extends State<EyedropperDialog> {
                           child: Stack(
                             children: [
                               RawImage(
-                                width: img.width / MediaQuery.of(context).devicePixelRatio,
-                                height: img.height / MediaQuery.of(context).devicePixelRatio,
+                                width: img.width /
+                                    MediaQuery.of(context).devicePixelRatio,
+                                height: img.height /
+                                    MediaQuery.of(context).devicePixelRatio,
                                 image: asyncSnapshot.data,
                               ),
                               Positioned(
@@ -112,7 +115,8 @@ class _EyedropperDialogState extends State<EyedropperDialog> {
                                           height: size + 4,
                                           width: size + 4,
                                           decoration: BoxDecoration(
-                                            border: Border.all(color: Colors.black, width: 24),
+                                            border: Border.all(
+                                                color: Colors.black, width: 24),
                                             shape: BoxShape.circle,
                                           ),
                                         ),
@@ -122,7 +126,8 @@ class _EyedropperDialogState extends State<EyedropperDialog> {
                                         height: size,
                                         width: size,
                                         decoration: BoxDecoration(
-                                          border: Border.all(color: _color, width: 20),
+                                          border: Border.all(
+                                              color: _color, width: 20),
                                           shape: BoxShape.circle,
                                         ),
                                       ),
@@ -155,25 +160,29 @@ class _EyedropperDialogState extends State<EyedropperDialog> {
                       child: Row(
                         children: [
                           Flexible(
-                            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                              Text(AppLocalizations.of(context)!.newColor),
-                              SizedBox(
-                                width: 10,
-                              ),
-                              Container(
-                                height: 30,
-                                width: 60,
-                                decoration: BoxDecoration(
-                                    color: _color, borderRadius: BorderRadius.circular(8)),
-                              ),
-                            ]),
+                            child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(AppLocalizations.of(context)!.newColor),
+                                  SizedBox(
+                                    width: 10,
+                                  ),
+                                  Container(
+                                    height: 30,
+                                    width: 60,
+                                    decoration: BoxDecoration(
+                                        color: _color,
+                                        borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                ]),
                           ),
                           Expanded(
                               child: ElevatedButton(
                                   onPressed: () {
                                     Navigator.of(context).pop(_color);
                                   },
-                                  child: Text(AppLocalizations.of(context)!.done)))
+                                  child:
+                                      Text(AppLocalizations.of(context)!.done)))
                         ],
                       ),
                     ),
@@ -203,8 +212,8 @@ class _EyedropperDialogState extends State<EyedropperDialog> {
     double py = _samplePosition.dy * MediaQuery.of(context).devicePixelRatio;
     if (px >= 0 && px < image.width && py >= 0 && py < image.height) {
       int index = (py.floor() * image.width + px.floor()) * 4;
-      _color = Color.fromARGB(_imageData![index + 3], _imageData![index], _imageData![index + 1],
-          _imageData![index + 2]);
+      _color = Color.fromARGB(_imageData![index + 3], _imageData![index],
+          _imageData![index + 1], _imageData![index + 2]);
       _hslColor = HSLColor.fromColor(_color);
     }
   }
@@ -257,8 +266,8 @@ class _HSLPickerState extends State<HSLPicker> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SliderTheme(
-          data:
-              SliderTheme.of(context).copyWith(trackShape: GradientSliderTrackShape(null, _s, _l)),
+          data: SliderTheme.of(context)
+              .copyWith(trackShape: GradientSliderTrackShape(null, _s, _l)),
           child: Slider(
               thumbColor: _color.toColor(),
               min: 0,
@@ -270,8 +279,8 @@ class _HSLPickerState extends State<HSLPicker> {
               }),
         ),
         SliderTheme(
-          data:
-              SliderTheme.of(context).copyWith(trackShape: GradientSliderTrackShape(_h, null, _l)),
+          data: SliderTheme.of(context)
+              .copyWith(trackShape: GradientSliderTrackShape(_h, null, _l)),
           child: Slider(
               thumbColor: _color.toColor(),
               min: 0,
@@ -283,8 +292,8 @@ class _HSLPickerState extends State<HSLPicker> {
               }),
         ),
         SliderTheme(
-          data:
-              SliderTheme.of(context).copyWith(trackShape: GradientSliderTrackShape(_h, _s, null)),
+          data: SliderTheme.of(context)
+              .copyWith(trackShape: GradientSliderTrackShape(_h, _s, null)),
           child: Slider(
               thumbColor: _color.toColor(),
               min: 0,
@@ -304,7 +313,8 @@ FragmentProgram? _hueGradientProgram;
 FragmentProgram? _saturationGradientProgram;
 FragmentProgram? _lightnessGradientProgram;
 
-class GradientSliderTrackShape extends SliderTrackShape with BaseSliderTrackShape {
+class GradientSliderTrackShape extends SliderTrackShape
+    with BaseSliderTrackShape {
   double? h;
   double? s;
   double? l;
@@ -315,11 +325,12 @@ class GradientSliderTrackShape extends SliderTrackShape with BaseSliderTrackShap
   }
 
   void loadShaders() async {
-    _hueGradientProgram ??= await FragmentProgram.fromAsset('assets/shaders/hue_gradient.frag');
-    _saturationGradientProgram ??=
-        await FragmentProgram.fromAsset('assets/shaders/saturation_gradient.frag');
-    _lightnessGradientProgram ??=
-        await FragmentProgram.fromAsset('assets/shaders/lightness_gradient.frag');
+    _hueGradientProgram ??=
+        await FragmentProgram.fromAsset('assets/shaders/hue_gradient.frag');
+    _saturationGradientProgram ??= await FragmentProgram.fromAsset(
+        'assets/shaders/saturation_gradient.frag');
+    _lightnessGradientProgram ??= await FragmentProgram.fromAsset(
+        'assets/shaders/lightness_gradient.frag');
   }
 
   @override
@@ -333,7 +344,9 @@ class GradientSliderTrackShape extends SliderTrackShape with BaseSliderTrackShap
       bool? isDiscrete,
       required ui.TextDirection textDirection}) {
     var barRect = Rect.fromCenter(
-        center: parentBox.paintBounds.center, width: parentBox.paintBounds.width - 48, height: 10);
+        center: parentBox.paintBounds.center,
+        width: parentBox.paintBounds.width - 48,
+        height: 10);
     final ui.FragmentProgram? program;
     if (h == null) {
       program = _hueGradientProgram;
@@ -369,6 +382,7 @@ class GradientSliderTrackShape extends SliderTrackShape with BaseSliderTrackShap
 
       _paint.shader = shader;
     }
-    context.canvas.drawRRect(RRect.fromRectAndRadius(barRect, Radius.circular(10)), _paint);
+    context.canvas.drawRRect(
+        RRect.fromRectAndRadius(barRect, Radius.circular(10)), _paint);
   }
 }

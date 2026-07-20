@@ -5,13 +5,11 @@ import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/util.dart';
 
 class CreatePackDialog extends StatefulWidget {
-  const CreatePackDialog(
-    this.packs, {
+  const CreatePackDialog({
     this.initialAnimated = false,
     super.key,
   });
 
-  final List<StickerPack> packs;
   final bool initialAnimated;
 
   @override
@@ -76,6 +74,7 @@ class _CreatePackDialogState extends State<CreatePackDialog> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4.0),
                 child: TextFormField(
+                  key: const Key('pack-title-field'),
                   autofocus: true,
                   validator: (v) => titleValidator(v, context),
                   controller: _nameController,
@@ -87,6 +86,7 @@ class _CreatePackDialogState extends State<CreatePackDialog> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4.0),
                 child: TextFormField(
+                  key: const Key('pack-author-field'),
                   validator: (v) => authorValidator(v, context),
                   controller: _authorController,
                   decoration: InputDecoration(
@@ -105,17 +105,17 @@ class _CreatePackDialogState extends State<CreatePackDialog> {
             },
             child: Text(AppLocalizations.of(context)!.cancel)),
         ElevatedButton(
+          key: const Key('create-pack-confirm'),
           onPressed: () {
             if (!_formKey.currentState!.validate()) return;
-            widget.packs.add(StickerPack(
+            Navigator.of(context).pop(StickerPack(
               _nameController.text,
               _authorController.text,
-              "pack_${DateTime.now().millisecondsSinceEpoch}",
+              "pack_${DateTime.now().microsecondsSinceEpoch}",
               [],
               "0",
               _animated,
             ));
-            Navigator.of(context).pop();
           },
           child: Text(AppLocalizations.of(context)!.add),
         ),

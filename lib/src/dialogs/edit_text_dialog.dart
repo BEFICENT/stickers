@@ -66,24 +66,28 @@ class _TextEditingDialogState extends State<TextEditingDialog> {
             children: [
               Padding(
                 padding: const EdgeInsets.only(right: 3.0),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  Text(
-                    widget.controller.text,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      inherit: false,
-                      fontSize: widget.parent.text.fontSize *
-                          (FontsRegistry.sizeMultiplier(widget.parent.text.fontName) ?? 1),
-                      foreground: Paint()
-                        ..strokeJoin = StrokeJoin.round
-                        ..strokeCap = StrokeCap.round
-                        ..color = widget.parent.text.outlineColor
-                        ..style = PaintingStyle.stroke
-                        ..strokeWidth = widget.parent.text.outlineWidth,
-                      fontFamily: widget.parent.text.fontName,
-                    ),
-                  ),
-                ]),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        widget.controller.text,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          inherit: false,
+                          fontSize: widget.parent.text.fontSize *
+                              (FontsRegistry.sizeMultiplier(
+                                      widget.parent.text.fontName) ??
+                                  1),
+                          foreground: Paint()
+                            ..strokeJoin = StrokeJoin.round
+                            ..strokeCap = StrokeCap.round
+                            ..color = widget.parent.text.outlineColor
+                            ..style = PaintingStyle.stroke
+                            ..strokeWidth = widget.parent.text.outlineWidth,
+                          fontFamily: widget.parent.text.fontName,
+                        ),
+                      ),
+                    ]),
               ),
               EditableText(
                 autofocus: true,
@@ -102,7 +106,9 @@ class _TextEditingDialogState extends State<TextEditingDialog> {
                 style: TextStyle(
                   inherit: false,
                   fontSize: widget.parent.text.fontSize *
-                      (FontsRegistry.sizeMultiplier(widget.parent.text.fontName) ?? 1),
+                      (FontsRegistry.sizeMultiplier(
+                              widget.parent.text.fontName) ??
+                          1),
                   color: widget.parent.text.textColor,
                   fontFamily: widget.parent.text.fontName,
                 ),
@@ -317,7 +323,8 @@ class _TextEditingDialogState extends State<TextEditingDialog> {
                           onPressed: () {
                             setState(() {
                               // Intentionally bypassing _setOutlineColor
-                              widget.parent.text.outlineColor = Colors.transparent;
+                              widget.parent.text.outlineColor =
+                                  Colors.transparent;
                             });
                           },
                           child: Text(AppLocalizations.of(context)!.off),
@@ -417,7 +424,12 @@ class _TextEditingDialogState extends State<TextEditingDialog> {
           children: [outlineColorPicker, outlineWidthSlider],
         );
 
-        _tools = [fontSelector, fontSizeSlider, textColorPicker, outlineConfigurator];
+        _tools = [
+          fontSelector,
+          fontSizeSlider,
+          textColorPicker,
+          outlineConfigurator
+        ];
 
         final toolbar = Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -428,7 +440,8 @@ class _TextEditingDialogState extends State<TextEditingDialog> {
                 child: Column(
                   children: [
                     AnimatedSwitcher(
-                        duration: Duration(milliseconds: 150), child: _tools[_currentTool]),
+                        duration: Duration(milliseconds: 150),
+                        child: _tools[_currentTool]),
                     actions,
                   ],
                 ),
@@ -484,8 +497,8 @@ class _TextEditingDialogState extends State<TextEditingDialog> {
     if (color == Colors.transparent) {
       _pickedColor = await showDialog(
           context: context,
-          builder: (context) => EyedropperDialog(
-              widget.rbKey.currentContext!.findRenderObject() as RenderRepaintBoundary));
+          builder: (context) => EyedropperDialog(widget.rbKey.currentContext!
+              .findRenderObject() as RenderRepaintBoundary));
       color = _pickedColor!;
     }
     setState(() {
@@ -497,8 +510,8 @@ class _TextEditingDialogState extends State<TextEditingDialog> {
     if (color == Colors.transparent) {
       _pickedColor = await showDialog(
           context: context,
-          builder: (context) => EyedropperDialog(
-              widget.rbKey.currentContext!.findRenderObject() as RenderRepaintBoundary));
+          builder: (context) => EyedropperDialog(widget.rbKey.currentContext!
+              .findRenderObject() as RenderRepaintBoundary));
       color = _pickedColor!;
     }
     setState(() {
@@ -514,7 +527,8 @@ class LabeledIconButton extends StatelessWidget {
 
   final GestureDoubleTapCallback? onTap;
 
-  const LabeledIconButton(this.icon, this.label, {super.key, this.active = false, this.onTap});
+  const LabeledIconButton(this.icon, this.label,
+      {super.key, this.active = false, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -539,7 +553,9 @@ class LabeledIconButton extends StatelessWidget {
                     padding: EdgeInsets.all(4),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(100),
-                      color: active ? Theme.of(context).colorScheme.primary.withAlpha(100) : null,
+                      color: active
+                          ? Theme.of(context).colorScheme.primary.withAlpha(100)
+                          : null,
                     ),
                     child: icon),
                 Padding(

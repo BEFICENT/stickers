@@ -9,6 +9,7 @@ import 'package:stickers/src/constants.dart';
 import 'package:stickers/src/data/load_store.dart';
 import 'package:stickers/src/data/pack_repository.dart';
 import 'package:stickers/src/data/pack_store.dart';
+import 'package:stickers/src/diagnostics/app_diagnostics.dart';
 import 'package:stickers/src/fonts_api/fonts_registry.dart';
 import 'package:stickers/src/globals.dart';
 
@@ -16,7 +17,7 @@ import 'src/app.dart';
 import 'src/settings/settings_controller.dart';
 import 'src/settings/settings_service.dart';
 
-void main() async {
+Future<void> main() async {
   Stopwatch sw = Stopwatch()..start();
   WidgetsFlutterBinding.ensureInitialized();
   final packageInfoTask =
@@ -35,6 +36,11 @@ void main() async {
   settingsController = SettingsController(service);
 
   final documentsDirectory = await getApplicationDocumentsDirectory();
+  final supportDirectory = await getApplicationSupportDirectory();
+  await AppDiagnostics.initialize(
+    Directory('${supportDirectory.path}/diagnostics'),
+  );
+  AppDiagnostics.installGlobalHandlers();
   packsDir = "${documentsDirectory.path}/packs";
   configurePackRepository(PackRepository(Directory(packsDir)));
   await Future.wait([

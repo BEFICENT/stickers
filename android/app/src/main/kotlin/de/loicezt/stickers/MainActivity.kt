@@ -1,8 +1,10 @@
 package de.loicezt.stickers
 
 import de.loicezt.stickers.video.CropAndScale
+import de.loicezt.stickers.video.GifOverlayRequest
 import de.loicezt.stickers.video.OverlayAndEncode
-import de.loicezt.stickers.video.WebPConfig
+import de.loicezt.stickers.video.TrimRequest
+import de.loicezt.stickers.video.VideoOverlayRequest
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -40,17 +42,13 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "startTrim" -> {
                     try {
-                        val args = call.arguments as Map<*, *>
-                        val inputFile = File(args["inputFile"]!! as String)
-                        val outputFile = File(args["outputFile"]!! as String)
-                        val startTimeUs = (args["startTimeUs"]!! as Number).toLong()
-                        val endTimeUs = (args["endTimeUs"]!! as Number).toLong()
+                        val request = TrimRequest.from(call.arguments)
                         cropAndScale.start(
-                            args["requestId"]!! as String,
-                            inputFile,
-                            outputFile,
-                            startTimeUs,
-                            endTimeUs,
+                            request.requestId,
+                            File(request.inputFile),
+                            File(request.outputFile),
+                            request.startTimeUs,
+                            request.endTimeUs,
                             24
                         )
                         result.success(null)
@@ -64,22 +62,15 @@ class MainActivity : FlutterActivity() {
                 }
 
                 "startOverlay" -> {
-                    val args = call.arguments as? Map<*, *>;
-                    if (args == null) {
-                        result.error("INVALID_ARGUMENTS", "Arguments must be a map", null)
-                        return@setMethodCallHandler
-                    }
                     try {
-                        val videoFile = File(args["videoFile"]!! as String)
-                        val overlayFile = File(args["overlayFile"]!! as String)
-                        val outputFile = File(args["outputFile"]!! as String)
+                        val request = VideoOverlayRequest.from(call.arguments)
                         overlayAndEncode.start(
-                            args["requestId"]!! as String,
-                            videoFile,
-                            overlayFile,
-                            outputFile,
-                            WebPConfig.fromMap(args["config"]!! as Map<*, *>),
-                            (args["fps"]!! as Number).toInt()
+                            request.requestId,
+                            File(request.videoFile),
+                            File(request.overlayFile),
+                            File(request.outputFile),
+                            request.config,
+                            request.fps
                         )
                         result.success(null)
                     } catch (e: Exception) {
@@ -92,24 +83,17 @@ class MainActivity : FlutterActivity() {
                 }
 
                 "startGifOverlay" -> {
-                    val args = call.arguments as? Map<*, *>
-                    if (args == null) {
-                        result.error("INVALID_ARGUMENTS", "Arguments must be a map", null)
-                        return@setMethodCallHandler
-                    }
                     try {
-                        val gifFile = File(args["gifFile"]!! as String)
-                        val overlayFile = File(args["overlayFile"]!! as String)
-                        val outputFile = File(args["outputFile"]!! as String)
+                        val request = GifOverlayRequest.from(call.arguments)
                         overlayAndEncode.startGif(
-                            args["requestId"]!! as String,
-                            gifFile,
-                            overlayFile,
-                            outputFile,
-                            (args["startMs"]!! as Number).toInt(),
-                            (args["endMs"]!! as Number).toInt(),
-                            WebPConfig.fromMap(args["config"]!! as Map<*, *>),
-                            (args["fps"]!! as Number).toInt()
+                            request.requestId,
+                            File(request.gifFile),
+                            File(request.overlayFile),
+                            File(request.outputFile),
+                            request.startMs,
+                            request.endMs,
+                            request.config,
+                            request.fps
                         )
                         result.success(null)
                     } catch (e: Exception) {

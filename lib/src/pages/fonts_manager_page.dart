@@ -36,7 +36,10 @@ class _FontsManagerPageState extends State<FontsManagerPage> {
               if (!context.mounted) return;
               if (answer != true) return;
 
-              Navigator.of(context).push(MaterialPageRoute(builder: (context) => FontsSearchPage())).then((_) {
+              Navigator.of(context)
+                  .push(MaterialPageRoute(
+                      builder: (context) => FontsSearchPage()))
+                  .then((_) {
                 setState(() {});
               });
             },
@@ -57,8 +60,10 @@ class _FontsManagerPageState extends State<FontsManagerPage> {
               key: ValueKey(i),
               child: ListTile(
                 onTap: () async {
-                  var result =
-                      await showDialog(context: context, builder: (context) => EditFontDialog(FontsRegistry.at(i)));
+                  var result = await showDialog(
+                      context: context,
+                      builder: (context) =>
+                          EditFontDialog(FontsRegistry.at(i)));
                   if (result == "") result = null;
                   FontsRegistry.at(i).display = result;
                   FontsRegistry.enqueueSave();
@@ -66,7 +71,9 @@ class _FontsManagerPageState extends State<FontsManagerPage> {
                 leading: IconButton(
                   onPressed: () async {
                     final shouldDelete = await showDialog(
-                        context: context, builder: (context) => DeleteConfirmDialog(FontsRegistry.at(i).family));
+                        context: context,
+                        builder: (context) =>
+                            DeleteConfirmDialog(FontsRegistry.at(i).family));
                     if (shouldDelete) {
                       FontsRegistry.delete(FontsRegistry.at(i).family);
                       setState(() {});
@@ -130,7 +137,8 @@ class _EditFontDialogState extends State<EditFontDialog> {
       content: TextField(
         controller: _controller,
         style: TextStyle(fontFamily: widget.entry.family),
-        decoration: InputDecoration(label: Text(AppLocalizations.of(context)!.displayName)),
+        decoration: InputDecoration(
+            label: Text(AppLocalizations.of(context)!.displayName)),
       ),
       actions: [
         TextButton(
@@ -168,7 +176,8 @@ class GoogleFontsConfirmationDialog extends StatelessWidget {
           TextButton.icon(
             icon: Icon(Icons.open_in_new),
             onPressed: () {
-              launchUrl(Uri.parse("https://developers.google.com/fonts/faq/privacy"));
+              launchUrl(
+                  Uri.parse("https://developers.google.com/fonts/faq/privacy"));
             },
             label: Text(AppLocalizations.of(context)!.moreInfo),
           ),

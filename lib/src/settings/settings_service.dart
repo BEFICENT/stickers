@@ -9,6 +9,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// persist the user settings locally, use the shared_preferences package. If
 /// you'd like to store settings on a web server, use the http package.
 class SettingsService {
+  static const _defaultTitleKey = "defaultTitle";
+  static const _legacyDefaultTitleKey = "defaultPackName";
+
   late SharedPreferences _prefs;
   late Future<SharedPreferences> _pFuture;
 
@@ -33,9 +36,23 @@ class SettingsService {
 
   Future<bool> googleFonts() async => _prefs.getBool("googleFonts") ?? false;
 
-  Future<String> defaultTitle() async => _prefs.getString("defaultPackName") ?? "New sticker pack";
+  Future<String> defaultTitle() async {
+    final title = _prefs.getString(_defaultTitleKey);
+    if (title != null) return title;
 
-  Future<String> defaultAuthor() async => _prefs.getString("defaultAuthor") ?? "auto-generated";
+    final legacyTitle = _prefs.getString(_legacyDefaultTitleKey);
+    if (legacyTitle != null) {
+      await _persist(
+        _prefs.setString(_defaultTitleKey, legacyTitle),
+        _defaultTitleKey,
+      );
+      return legacyTitle;
+    }
+    return "New sticker pack";
+  }
+
+  Future<String> defaultAuthor() async =>
+      _prefs.getString("defaultAuthor") ?? "auto-generated";
 
   Future<String> locale() async => _prefs.getString("locale") ?? _getLocale();
 
@@ -48,26 +65,50 @@ class SettingsService {
 
   /// Persists the user's preferred ThemeMode to local or remote storage.
   Future<void> updateThemeMode(ThemeMode theme) async {
-    _prefs.setString("themeMode", theme.name);
+    await _persist(_prefs.setString("themeMode", theme.name), "themeMode");
   }
 
   Future<void> updateQuickMode(bool quickMode) async {
-    _prefs.setBool("quickMode", quickMode);
+    await _persist(_prefs.setBool("quickMode", quickMode), "quickMode");
   }
 
   Future<void> updateDefaultTitle(String defaultTitle) async {
-    _prefs.setString("defaultTitle", defaultTitle);
+    await _persist(
+      _prefs.setString(_defaultTitleKey, defaultTitle),
+      _defaultTitleKey,
+    );
   }
 
   Future<void> updateDefaultAuthor(String defaultAuthor) async {
-    _prefs.setString("defaultAuthor", defaultAuthor);
+    await _persist(
+      _prefs.setString("defaultAuthor", defaultAuthor),
+      "defaultAuthor",
+    );
   }
 
   Future<void> updateLocale(String locale) async {
-    _prefs.setString("locale", locale);
+    await _persist(_prefs.setString("locale", locale), "locale");
   }
 
   Future<void> updateGoogleFonts(bool googleFonts) async {
-    _prefs.setBool("googleFonts", googleFonts);
+    await _persist(
+      _prefs.setBool("googleFonts", googleFonts),
+      "googleFonts",
+    );
   }
+
+  Future<void> _persist(Future<bool> write, String key) async {
+    if (!await write) {
+      throw SettingsPersistenceException(key);
+    }
+  }
+}
+
+class SettingsPersistenceException implements Exception {
+  final String key;
+
+  const SettingsPersistenceException(this.key);
+
+  @override
+  String toString() => "Could not persist setting: $key";
 }

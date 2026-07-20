@@ -8,6 +8,7 @@ import 'package:image_editor/image_editor.dart';
 import 'package:path/path.dart' as path;
 import 'package:share_plus/share_plus.dart';
 import 'package:stickers/src/constants.dart';
+import 'package:stickers/src/data/pack_service.dart';
 import 'package:stickers/src/data/sticker.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/data/pack_repository.dart';
@@ -17,13 +18,21 @@ import 'package:stickers/src/globals.dart';
 import 'package:stickers/src/media/webp_info.dart';
 
 PackRepository? _packRepository;
+PackService? _packService;
 
 PackRepository get packRepository =>
     _packRepository ??= PackRepository(Directory(packsDir));
 
 void configurePackRepository(PackRepository repository) {
   _packRepository = repository;
+  _packService = null;
 }
+
+PackService get packService => _packService ??= PackService(
+      store: packs,
+      repository: packRepository,
+      root: Directory(packsDir),
+    );
 
 Future<void> savePacks(List<StickerPack> packs) async {
   await packRepository.save(packs);
@@ -320,91 +329,32 @@ Future<Uint8List> cropSticker(Rect cropRect, Uint8List rawImageData,
 }
 
 Future<void> addToPack(StickerPack pack, int index, Uint8List data) async {
-  final dir = Directory("$packsDir/${pack.id}");
-  if (!await dir.exists()) {
-    await dir.create(recursive: true);
-  }
-
-  File output;
-  if (index == 30) {
-    output =
-        File("${dir.path}/tray_${DateTime.now().millisecondsSinceEpoch}.webp");
-    await output.writeAsBytes(data, flush: true);
-    pack.trayIcon = output.path;
-  } else {
-    output = File(
-        "${dir.path}/sticker_${index}_${DateTime.now().millisecondsSinceEpoch}.webp");
-    await output.writeAsBytes(data, flush: true);
-
-    if (!await output.exists() || await output.length() == 0) {
-      throw FileSystemException("Sticker file was not written", output.path);
-    }
-
-    final sticker = Sticker(output.path, ["❤"]);
-    pack.stickers.add(sticker);
-    try {
-      await pack.onEdit();
-    } catch (_) {
-      pack.stickers.remove(sticker);
-      if (await output.exists()) await output.delete();
-      rethrow;
-    }
-    _cleanupMediaCache();
-    return;
-  }
-
-  try {
-    await pack.onEdit();
-  } catch (_) {
-    pack.trayIcon = null;
-    if (await output.exists()) await output.delete();
-    rethrow;
-  }
-
-  _cleanupMediaCache();
+  await packService.addStickerBytes(pack, index, data);
+  await _cleanupMediaCache();
 }
 
 Future<void> deleteStickerFromPack(StickerPack pack, int index) async {
-  final sticker = pack.stickers.removeAt(index);
-  try {
-    await pack.onEdit();
-  } catch (_) {
-    pack.stickers.insert(index, sticker);
-    rethrow;
-  }
-
-  final file = File(sticker.source);
-  if (await file.exists()) {
-    try {
-      await file.delete();
-    } on FileSystemException catch (error) {
-      debugPrint("Failed to clean deleted sticker file: $error");
-    }
-  }
+  await packService.deleteSticker(pack, index);
 }
 
 Future<void> deletePack(StickerPack pack) async {
-  final index = packs.indexOf(pack);
-  if (index < 0) return;
-  await packs.transaction(() async {
-    packs.removeAt(index);
-    try {
-      await savePacks(packs);
-    } catch (_) {
-      packs.insert(index, pack);
-      rethrow;
-    }
-  });
-
-  final directory = Directory("$packsDir/${pack.id}");
-  if (await directory.exists()) {
-    try {
-      await directory.delete(recursive: true);
-    } on FileSystemException catch (error) {
-      debugPrint("Failed to clean deleted pack directory: $error");
-    }
-  }
+  await packService.deletePack(pack);
 }
+
+Future<void> createPack(StickerPack pack) => packService.createPack(pack);
+
+Future<void> updatePack(StickerPack pack, PackDetails details) =>
+    packService.updatePack(pack, details);
+
+Future<void> updateStickerEmojis(
+  StickerPack pack,
+  int index,
+  List<String> emojis,
+) =>
+    packService.updateStickerEmojis(pack, index, emojis);
+
+Future<void> setPackTray(StickerPack pack, File source) =>
+    packService.setTrayFromFile(pack, source);
 
 Future<void> _cleanupMediaCache() async {
   try {

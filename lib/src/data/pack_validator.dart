@@ -29,6 +29,10 @@ class PackValidator {
     if (pack.title.trim().isEmpty) issues.add('Pack title cannot be empty.');
     if (pack.author.trim().isEmpty) issues.add('Pack author cannot be empty.');
     if (pack.id.trim().isEmpty) issues.add('Pack identifier cannot be empty.');
+    final imageDataVersion = int.tryParse(pack.imageDataVersion);
+    if (imageDataVersion == null || imageDataVersion < 0) {
+      issues.add('Pack image data version must be a non-negative integer.');
+    }
     if (pack.stickers.length > maxPackStickerCount) {
       issues.add(
           'A pack cannot contain more than $maxPackStickerCount stickers.');
@@ -42,31 +46,11 @@ class PackValidator {
 
     for (var index = 0; index < pack.stickers.length; index++) {
       final file = File(pack.stickers[index].source);
-      if (!await file.exists()) {
-        issues.add('Sticker ${index + 1} is missing.');
-        continue;
-      }
-      final size = await file.length();
-      final sizeLimit =
-          pack.animated ? maxAnimatedStickerBytes : maxStaticStickerBytes;
-      if (size > sizeLimit) {
-        issues.add(
-          'Sticker ${index + 1} exceeds the ${sizeLimit ~/ 1024} KB size limit.',
-        );
-      }
-      try {
-        final info = await readWebPInfo(file);
-        if (info.width != stickerDimension || info.height != stickerDimension) {
-          issues.add('Sticker ${index + 1} must be 512x512 pixels.');
-        }
-        if (info.animated != pack.animated) {
-          issues.add(
-            'Sticker ${index + 1} does not match the pack animation type.',
-          );
-        }
-      } on FormatException {
-        issues.add('Sticker ${index + 1} is not a valid WebP image.');
-      }
+      issues.addAll(await validateStickerFile(
+        file,
+        animated: pack.animated,
+        label: 'Sticker ${index + 1}',
+      ));
     }
     return issues;
   }
@@ -78,6 +62,47 @@ class PackValidator {
     final issues = await validate(
       pack,
       requireWhatsappMinimum: requireWhatsappMinimum,
+    );
+    if (issues.isNotEmpty) throw PackValidationException(issues);
+  }
+
+  Future<List<String>> validateStickerFile(
+    File file, {
+    required bool animated,
+    String label = 'Sticker',
+  }) async {
+    if (!await file.exists()) return ['$label is missing.'];
+
+    final issues = <String>[];
+    final size = await file.length();
+    final sizeLimit =
+        animated ? maxAnimatedStickerBytes : maxStaticStickerBytes;
+    if (size > sizeLimit) {
+      issues.add('$label exceeds the ${sizeLimit ~/ 1024} KB size limit.');
+    }
+    try {
+      final info = await readWebPInfo(file);
+      if (info.width != stickerDimension || info.height != stickerDimension) {
+        issues.add('$label must be 512x512 pixels.');
+      }
+      if (info.animated != animated) {
+        issues.add('$label does not match the pack animation type.');
+      }
+    } on FormatException {
+      issues.add('$label is not a valid WebP image.');
+    }
+    return issues;
+  }
+
+  Future<void> validateStickerFileOrThrow(
+    File file, {
+    required bool animated,
+    String label = 'Sticker',
+  }) async {
+    final issues = await validateStickerFile(
+      file,
+      animated: animated,
+      label: label,
     );
     if (issues.isNotEmpty) throw PackValidationException(issues);
   }

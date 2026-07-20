@@ -12,6 +12,9 @@ import 'package:stickers/src/dialogs/delete_confirm_dialog.dart';
 import 'package:stickers/src/dialogs/edit_pack_dialog.dart';
 import 'package:stickers/src/dialogs/edit_sticker_dialog.dart';
 import 'package:stickers/src/dialogs/error_dialog.dart';
+import 'package:stickers/src/media/media_probe.dart';
+import 'package:stickers/src/navigation/edit_arguments.dart';
+import 'package:stickers/src/navigation/batch_import_navigation.dart';
 import 'package:stickers/src/pages/crop_page.dart';
 import 'package:stickers/src/pages/default_page.dart';
 import 'package:stickers/src/pages/gif_crop_page.dart';
@@ -362,13 +365,10 @@ class StickerPackPageState extends State<StickerPackPage> {
       allowMultiple: true,
       dialogTitle: dialogTitle,
     );
-    final items = result?.files
-            .map((file) => file.path)
-            .whereType<String>()
-            .map((path) =>
-                BatchImportItem(path: path, kind: BatchImportMediaKind.picture))
-            .toList() ??
-        [];
+    final items = await _probeBatchItems(
+      result?.files.map((file) => file.path).whereType<String>() ?? const [],
+      const {SourceMediaKind.image},
+    );
     _startBatchImport(items,
         limitMessage: limitMessage, emptyMessage: emptyMessage);
   }
@@ -384,26 +384,28 @@ class StickerPackPageState extends State<StickerPackPage> {
       allowMultiple: true,
       dialogTitle: dialogTitle,
     );
-    final items = result?.files
-            .map((file) => file.path)
-            .whereType<String>()
-            .map(_animatedBatchItemForPath)
-            .whereType<BatchImportItem>()
-            .toList() ??
-        [];
+    final items = await _probeBatchItems(
+      result?.files.map((file) => file.path).whereType<String>() ?? const [],
+      const {SourceMediaKind.gif, SourceMediaKind.video},
+    );
     _startBatchImport(items,
         limitMessage: limitMessage, emptyMessage: emptyMessage);
   }
 
-  BatchImportItem? _animatedBatchItemForPath(String path) {
-    final extension = path.split(".").last.toLowerCase();
-    if (extension == "gif") {
-      return BatchImportItem(path: path, kind: BatchImportMediaKind.gif);
-    }
-    if (["mp4", "mov", "m4v", "3gp", "3gpp", "webm"].contains(extension)) {
-      return BatchImportItem(path: path, kind: BatchImportMediaKind.video);
-    }
-    return null;
+  Future<List<BatchImportItem>> _probeBatchItems(
+    Iterable<String> paths,
+    Set<SourceMediaKind> allowedKinds,
+  ) async {
+    final items = await Future.wait(paths.map((mediaPath) async {
+      try {
+        final descriptor = await const MediaProbe().probe(File(mediaPath));
+        if (!allowedKinds.contains(descriptor.kind)) return null;
+        return BatchImportItem(path: descriptor.path, kind: descriptor.kind);
+      } on FileSystemException {
+        return null;
+      }
+    }));
+    return items.whereType<BatchImportItem>().toList();
   }
 
   void _startBatchImport(
@@ -430,39 +432,17 @@ class StickerPackPageState extends State<StickerPackPage> {
     final firstItem = queue.next()!;
     Navigator.pushNamed(
       context,
-      _routeForBatchItem(firstItem),
+      BatchImportNavigation.routeFor(firstItem),
       arguments: EditArguments(
         pack: widget.pack,
         index: widget.pack.stickers.length,
         mediaPath: firstItem.path,
-        type: _mediaTypeForBatchItem(firstItem),
+        type: BatchImportNavigation.mediaTypeFor(firstItem),
         batchQueue: queue,
       ),
     ).then((value) {
       if (mounted) setState(() {});
     });
-  }
-
-  String _routeForBatchItem(BatchImportItem item) {
-    switch (item.kind) {
-      case BatchImportMediaKind.picture:
-        return CropPage.routeName;
-      case BatchImportMediaKind.video:
-        return VideoCropPage.routeName;
-      case BatchImportMediaKind.gif:
-        return GifCropPage.routeName;
-    }
-  }
-
-  MediaType _mediaTypeForBatchItem(BatchImportItem item) {
-    switch (item.kind) {
-      case BatchImportMediaKind.picture:
-        return MediaType.picture;
-      case BatchImportMediaKind.video:
-        return MediaType.video;
-      case BatchImportMediaKind.gif:
-        return MediaType.gif;
-    }
   }
 }
 

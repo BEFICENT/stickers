@@ -16,11 +16,15 @@ Future<String?> _registerBundledFont(String family, Directory fontsDir) async {
   if (!await fontFile.exists()) {
     debugPrint("Copying file to ${fontFile.path}");
     await fontFile.create();
-    await fontFile.writeAsBytes((await rootBundle.load("assets/fonts/$family.ttf")).buffer.asInt8List());
+    await fontFile.writeAsBytes(
+        (await rootBundle.load("assets/fonts/$family.ttf"))
+            .buffer
+            .asInt8List());
   }
   final registeredName = await FontManager.registerFont(fontFile, family);
   if (registeredName != family) {
-    throw Exception("Registered Name and font name do not match!\n$registeredName != $family!");
+    throw Exception(
+        "Registered Name and font name do not match!\n$registeredName != $family!");
   }
   debugPrint("Registered font $family");
   return fontFile.path;
@@ -35,7 +39,8 @@ Future<String?> registerFont(FontsRegistryEntry entry) async {
   }
   final registeredName = await FontManager.registerFont(fontFile, entry.family);
   if (registeredName != entry.family) {
-    throw Exception("Registered Name and font name do not match!\n$registeredName != ${entry.family}!");
+    throw Exception(
+        "Registered Name and font name do not match!\n$registeredName != ${entry.family}!");
   }
   debugPrint("Registered font ${entry.family}");
   return fontFile.path;
@@ -45,7 +50,8 @@ Future<String?> registerFont(FontsRegistryEntry entry) async {
 Future<void> loadFonts(List<FontsRegistryEntry> fonts) async {
   debugPrint("Registering fonts...");
   Stopwatch sw = Stopwatch()..start();
-  Directory fontsDir = Directory("${(await getApplicationDocumentsDirectory()).path}/bundled_fonts");
+  Directory fontsDir = Directory(
+      "${(await getApplicationDocumentsDirectory()).path}/bundled_fonts");
   if (!await fontsDir.exists()) await fontsDir.create(recursive: true);
   final futures = <Future>[];
   for (final font in fonts) {
@@ -65,15 +71,20 @@ final List<FontsRegistryEntry> _bundledFonts = [
   FontsRegistryEntry("sans-serif", FontType.bundled, display: "Classic"),
   FontsRegistryEntry("Saira Stencil One", FontType.bundled, display: "Stencil"),
   FontsRegistryEntry("Lobster", FontType.bundled, display: "Lobster"),
-  FontsRegistryEntry("Press Start 2P", FontType.bundled, display: "Game", sizeMultiplier: .7),
+  FontsRegistryEntry("Press Start 2P", FontType.bundled,
+      display: "Game", sizeMultiplier: .7),
   FontsRegistryEntry("Racing Sans One", FontType.bundled, display: "Racing"),
-  FontsRegistryEntry("Unifraktur Maguntia", FontType.bundled, display: "Gothic"),
-  FontsRegistryEntry("Roboto Mono", FontType.bundled, display: "type", sizeMultiplier: .8),
+  FontsRegistryEntry("Unifraktur Maguntia", FontType.bundled,
+      display: "Gothic"),
+  FontsRegistryEntry("Roboto Mono", FontType.bundled,
+      display: "type", sizeMultiplier: .8),
   FontsRegistryEntry("DM Serif Text", FontType.bundled, display: "Serif"),
   FontsRegistryEntry("Pacifico", FontType.bundled, display: "Pacifico"),
   FontsRegistryEntry("Sacramento", FontType.bundled, display: "Sacramento"),
-  FontsRegistryEntry("Passions Conflict", FontType.bundled, display: "Passion", sizeMultiplier: 1.4),
-  FontsRegistryEntry("Island Moments", FontType.bundled, display: "Island", sizeMultiplier: 1.3),
+  FontsRegistryEntry("Passions Conflict", FontType.bundled,
+      display: "Passion", sizeMultiplier: 1.4),
+  FontsRegistryEntry("Island Moments", FontType.bundled,
+      display: "Island", sizeMultiplier: 1.3),
 ];
 
 class FontsRegistryEntry {
@@ -86,7 +97,11 @@ class FontsRegistryEntry {
   double sizeMultiplier;
 
   FontsRegistryEntry(this.family, this.type,
-      {this.isLoaded = false, this.previewFile, this.fontFile, this.sizeMultiplier = 1, this.display});
+      {this.isLoaded = false,
+      this.previewFile,
+      this.fontFile,
+      this.sizeMultiplier = 1,
+      this.display});
 
   Map<String, dynamic> toJson() {
     return {
@@ -102,7 +117,8 @@ class FontsRegistryEntry {
   factory FontsRegistryEntry.fromJson(Map<String, dynamic> json) {
     return FontsRegistryEntry(
       json['family'],
-      FontType.values.firstWhere((element) => element.toString() == json['type']),
+      FontType.values
+          .firstWhere((element) => element.toString() == json['type']),
       previewFile: json['previewFile'],
       fontFile: json['fontFile'],
       sizeMultiplier: json['sizeMultiplier'],
@@ -145,11 +161,13 @@ class FontsRegistry {
     _init = true;
 
     try {
-      _config = File("${(await getApplicationDocumentsDirectory()).path}/fonts.json");
+      _config =
+          File("${(await getApplicationDocumentsDirectory()).path}/fonts.json");
       try {
         if (await _config.exists()) {
           Stopwatch sw = Stopwatch()..start();
-          final List<FontsRegistryEntry> data = jsonDecode(await _config.readAsString())
+          final List<FontsRegistryEntry> data = jsonDecode(
+                  await _config.readAsString())
               .map<FontsRegistryEntry>((e) => FontsRegistryEntry.fromJson(e))
               .toList();
           debugPrint("[FontsRegistry] read t=${sw.elapsedMilliseconds}ms");
@@ -180,7 +198,8 @@ class FontsRegistry {
 
           registerTasks.add(loadFonts(_orderedEntries));
           await Future.wait(registerTasks);
-          debugPrint("[FontsRegistry] loaded ${_entries.length} fonts in ${sw.elapsedMilliseconds}ms");
+          debugPrint(
+              "[FontsRegistry] loaded ${_entries.length} fonts in ${sw.elapsedMilliseconds}ms");
           return;
         }
       } on Exception catch (e, st) {
@@ -203,10 +222,12 @@ class FontsRegistry {
     }
   }
 
-  static Future<void> _registerFontToEngine(FontsRegistryEntry f, bool preview) async {
+  static Future<void> _registerFontToEngine(
+      FontsRegistryEntry f, bool preview) async {
     final loader = FontLoader("${f.family}${preview ? '-PREVIEW' : ''}");
-    loader.addFont(
-        Future.value(ByteData.view((await File(preview ? f.previewFile! : f.fontFile!).readAsBytes()).buffer)));
+    loader.addFont(Future.value(ByteData.view(
+        (await File(preview ? f.previewFile! : f.fontFile!).readAsBytes())
+            .buffer)));
     await loader.load();
   }
 
@@ -252,11 +273,14 @@ class FontsRegistry {
     data.addAll(_orderedEntries.map((e) => e.toJson()));
 // The logic here is that all entries that have a font file (not only preview) should already be in the list,
 // so this should be sufficient to deduplicate the data. (except for sans-serif)
-    data.addAll(_entries.values.where((f) => f.fontFile == null && f.family != "sans-serif").map((e) => e.toJson()));
+    data.addAll(_entries.values
+        .where((f) => f.fontFile == null && f.family != "sans-serif")
+        .map((e) => e.toJson()));
 
     await _config.create(recursive: true);
     await _config.writeAsString(jsonEncode(data));
-    debugPrint("Saved Fonts registry to ${_config.path} in ${sw.elapsedMilliseconds}ms");
+    debugPrint(
+        "Saved Fonts registry to ${_config.path} in ${sw.elapsedMilliseconds}ms");
   }
 
   // Delete a font from the registry

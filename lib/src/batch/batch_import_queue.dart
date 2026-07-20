@@ -1,13 +1,17 @@
-enum BatchImportMediaKind { picture, video, gif }
+import 'package:stickers/src/media/media_probe.dart';
 
 class BatchImportItem {
   final String path;
-  final BatchImportMediaKind kind;
+  final SourceMediaKind kind;
 
   const BatchImportItem({
     required this.path,
     required this.kind,
-  });
+  }) : assert(
+          kind == SourceMediaKind.image ||
+              kind == SourceMediaKind.video ||
+              kind == SourceMediaKind.gif,
+        );
 }
 
 class BatchImportQueue {

@@ -3,8 +3,9 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:image_editor/image_editor.dart';
 import 'package:stickers/src/dialogs/edit_text_dialog.dart';
+import 'package:stickers/src/editor/editor_layer.dart';
 import 'package:stickers/src/fonts_api/fonts_registry.dart';
-import 'package:stickers/src/pages/edit_page.dart';
+import 'package:stickers/src/navigation/app_routes.dart';
 
 class TextLayer extends StatefulWidget implements EditorLayer {
   final EditorText text;
@@ -84,7 +85,9 @@ class TextLayerState extends State<TextLayer> with TickerProviderStateMixin {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     inherit: false,
-                    fontSize: widget.text.fontSize * (FontsRegistry.sizeMultiplier(widget.text.fontName) ?? 1),
+                    fontSize: widget.text.fontSize *
+                        (FontsRegistry.sizeMultiplier(widget.text.fontName) ??
+                            1),
                     foreground: Paint()
                       ..strokeJoin = StrokeJoin.round
                       ..strokeCap = StrokeCap.round
@@ -99,7 +102,9 @@ class TextLayerState extends State<TextLayer> with TickerProviderStateMixin {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     inherit: false,
-                    fontSize: widget.text.fontSize * (FontsRegistry.sizeMultiplier(widget.text.fontName) ?? 1),
+                    fontSize: widget.text.fontSize *
+                        (FontsRegistry.sizeMultiplier(widget.text.fontName) ??
+                            1),
                     color: widget.text.textColor,
                     fontFamily: widget.text.fontName,
                   ),
@@ -118,7 +123,8 @@ class TextLayerState extends State<TextLayer> with TickerProviderStateMixin {
   }
 
   void disableEditing() {
-    Navigator.of(context).popUntil((route) => route.settings.name == EditPage.routeName);
+    Navigator.of(context)
+        .popUntil((route) => route.settings.name == AppRoutes.editor);
   }
 }
 
@@ -130,11 +136,15 @@ class FontPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double paddingDiff = MediaQuery.of(context).textScaler.scale(max(15 * (font.sizeMultiplier - 1), 0)) / 2;
+    final double paddingDiff = MediaQuery.of(context)
+            .textScaler
+            .scale(max(15 * (font.sizeMultiplier - 1), 0)) /
+        2;
     return Column(
       children: [
         Container(
-          padding: EdgeInsets.fromLTRB(12, 8 - paddingDiff, 12, 8 - paddingDiff),
+          padding:
+              EdgeInsets.fromLTRB(12, 8 - paddingDiff, 12, 8 - paddingDiff),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             color: active
@@ -153,7 +163,9 @@ class FontPreview extends StatelessWidget {
                 style: TextStyle(
                     color: Colors.white,
                     fontFamily: font.family,
-                    fontSize: MediaQuery.of(context).textScaler.scale(15 * font.sizeMultiplier)),
+                    fontSize: MediaQuery.of(context)
+                        .textScaler
+                        .scale(15 * font.sizeMultiplier)),
               )),
         ),
       ],

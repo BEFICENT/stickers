@@ -79,7 +79,8 @@ GifInfo parseGifInfo(Uint8List data) {
     throw const FormatException("GIF contains no frames");
   }
 
-  return GifInfo(duration: Duration(milliseconds: totalDelayMs), frameCount: frameCount);
+  return GifInfo(
+      duration: Duration(milliseconds: totalDelayMs), frameCount: frameCount);
 }
 
 int _skipSubBlocks(Uint8List data, int offset) {

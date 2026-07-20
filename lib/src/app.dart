@@ -7,6 +7,7 @@ import 'package:share_handler/share_handler.dart';
 import 'package:stickers/generated/intl/app_localizations.dart';
 import 'package:stickers/src/data/load_store.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
+import 'package:stickers/src/dialogs/edit_pack_dialog.dart';
 import 'package:stickers/src/dialogs/error_dialog.dart';
 import 'package:stickers/src/globals.dart';
 import 'package:stickers/src/media/media_probe.dart';
@@ -171,9 +172,18 @@ class StickersAppState extends State<StickersApp> {
     }
     if (descriptor.kind == SourceMediaKind.packArchive) {
       try {
-        await importPack(File(attachment.path));
+        final importResult = await importPack(File(attachment.path));
         if (mounted) setState(() {});
-      } on Exception catch (_) {
+        for (final pack in importResult.packsMissingMetadata) {
+          if (!mounted || navigatorKey.currentContext == null) return;
+          await showDialog<void>(
+            context: navigatorKey.currentContext!,
+            builder: (_) => EditPackDialog(pack),
+          );
+        }
+      } on Exception catch (error, stackTrace) {
+        debugPrint('Shared pack import failed: $error');
+        debugPrintStack(stackTrace: stackTrace);
         if (mounted) {
           showDialog(
               context: navigatorKey.currentState!.context,

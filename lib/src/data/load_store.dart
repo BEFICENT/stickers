@@ -34,6 +34,16 @@ PackService get packService => _packService ??= PackService(
       root: Directory(packsDir),
     );
 
+class PackImportResult {
+  final List<StickerPack> packs;
+  final List<StickerPack> packsMissingMetadata;
+
+  const PackImportResult({
+    required this.packs,
+    this.packsMissingMetadata = const [],
+  });
+}
+
 Future<void> savePacks(List<StickerPack> packs) async {
   await packRepository.save(packs);
 }
@@ -69,7 +79,7 @@ Future<void> exportPack(StickerPack pack) async {
   SharePlus.instance.share(ShareParams(files: [XFile(zipFile.path)]));
 }
 
-Future<void> importPack(File f) async {
+Future<PackImportResult> importPack(File f) async {
   final stopwatch = Stopwatch()..start();
   final unzipDir = Directory(
     "$mediaCacheDir/pack_${DateTime.timestamp().microsecondsSinceEpoch}",
@@ -77,12 +87,13 @@ Future<void> importPack(File f) async {
   try {
     await extractZipSafely(f, unzipDir);
     debugPrint("Unzip t=${stopwatch.elapsedMilliseconds}ms");
-    final candidates = await _parseImportedPacks(f, unzipDir);
-    if (candidates.isEmpty) {
+    final result = await _parseImportedPacks(f, unzipDir);
+    if (result.packs.isEmpty) {
       throw const FormatException("Archive does not contain a sticker pack");
     }
     debugPrint("Parse t=${stopwatch.elapsedMilliseconds}ms");
-    await _installImportedPacks(candidates, unzipDir, stopwatch);
+    await _installImportedPacks(result.packs, unzipDir, stopwatch);
+    return result;
   } finally {
     try {
       if (await unzipDir.exists()) await unzipDir.delete(recursive: true);
@@ -93,13 +104,13 @@ Future<void> importPack(File f) async {
   }
 }
 
-Future<List<StickerPack>> _parseImportedPacks(
+Future<PackImportResult> _parseImportedPacks(
   File archive,
   Directory unzipDir,
 ) async {
   switch (path.extension(archive.path).toLowerCase()) {
     case ".wastickers":
-      return [await _parseWastickersPack(unzipDir)];
+      return _parseWastickersPack(unzipDir);
     case ".stickify":
       final result = <StickerPack>[];
       await for (final entity in unzipDir.list()) {
@@ -140,10 +151,15 @@ Future<List<StickerPack>> _parseImportedPacks(
           );
         }
       }
-      return result;
+      return PackImportResult(packs: result);
     default:
       final jsonFile = File("${unzipDir.path}/pack.json");
-      if (!await jsonFile.exists()) return [];
+      if (!await jsonFile.exists()) {
+        final result = await _parseWastickersPack(unzipDir);
+        return result.packs.single.stickers.isEmpty
+            ? const PackImportResult(packs: [])
+            : result;
+      }
       final document = jsonDecode(await jsonFile.readAsString());
       if (document is! Map) {
         throw const FormatException("Invalid pack document");
@@ -155,11 +171,11 @@ Future<List<StickerPack>> _parseImportedPacks(
       if (pack.trayIcon != null) {
         pack.trayIcon = path.join(unzipDir.path, pack.trayIcon!);
       }
-      return [pack];
+      return PackImportResult(packs: [pack]);
   }
 }
 
-Future<StickerPack> _parseWastickersPack(Directory unzipDir) async {
+Future<PackImportResult> _parseWastickersPack(Directory unzipDir) async {
   final contents = await unzipDir.list(followLinks: false).toList();
   final stickerFiles = contents
       .whereType<File>()
@@ -172,19 +188,24 @@ Future<StickerPack> _parseWastickersPack(Directory unzipDir) async {
       .where((file) => path.extension(file.path).toLowerCase() == ".png")
       .firstOrNull;
 
-  return StickerPack(
-    await _readOptionalImportText(
-            File(path.join(unzipDir.path, "title.txt"))) ??
-        "Imported sticker pack",
-    await _readOptionalImportText(
-          File(path.join(unzipDir.path, "author.txt")),
-        ) ??
-        "Imported from WhatsApp",
+  final title = await _readOptionalImportText(
+    File(path.join(unzipDir.path, "title.txt")),
+  );
+  final author = await _readOptionalImportText(
+    File(path.join(unzipDir.path, "author.txt")),
+  );
+  final pack = StickerPack(
+    title ?? "Imported sticker pack",
+    author ?? "Imported from WhatsApp",
     "imported",
     stickerFiles.map((file) => Sticker(file.path, ["❤"])).toList(),
     "1000",
     false,
     trayIcon: trayIcon?.path,
+  );
+  return PackImportResult(
+    packs: [pack],
+    packsMissingMetadata: title == null || author == null ? [pack] : const [],
   );
 }
 

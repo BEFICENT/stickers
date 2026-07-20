@@ -69,13 +69,16 @@ void main() {
     expect(installed, isEmpty);
   });
 
-  test('imports a metadata-less pack shared by WhatsApp', () async {
+  test('imports a metadata-less pack shared by WhatsApp as a generic zip',
+      () async {
     final archive = await _createWhatsAppSharedArchive(temporaryDirectory);
 
-    await importPack(archive);
+    final result = await importPack(archive);
 
     expect(globals.packs, hasLength(1));
     final imported = globals.packs.single;
+    expect(result.packs.single, same(imported));
+    expect(result.packsMissingMetadata.single, same(imported));
     expect(imported.title, 'Imported sticker pack');
     expect(imported.author, 'Imported from WhatsApp');
     expect(imported.animated, isFalse);
@@ -93,12 +96,14 @@ void main() {
       temporaryDirectory,
       title: 'Legacy title',
       author: 'Legacy author',
+      extension: 'wastickers',
     );
 
-    await importPack(archive);
+    final result = await importPack(archive);
 
     expect(globals.packs.single.title, 'Legacy title');
     expect(globals.packs.single.author, 'Legacy author');
+    expect(result.packsMissingMetadata, isEmpty);
   });
 }
 
@@ -142,6 +147,7 @@ Future<File> _createWhatsAppSharedArchive(
   Directory directory, {
   String? title,
   String? author,
+  String extension = 'zip',
 }) async {
   final archive = Archive();
   for (final index in [2, 0, 1]) {
@@ -166,7 +172,7 @@ Future<File> _createWhatsAppSharedArchive(
     archive.addFile(ArchiveFile.string('author.txt', author));
   }
 
-  final file = File('${directory.path}/shared.wastickers');
+  final file = File('${directory.path}/shared.$extension');
   final output = OutputFileStream(file.path);
   ZipEncoder().encode(archive, output: output);
   await output.close();

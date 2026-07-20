@@ -7,6 +7,7 @@ import 'package:stickers/src/constants.dart';
 import 'package:stickers/src/data/load_store.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/dialogs/create_pack_dialog.dart';
+import 'package:stickers/src/dialogs/edit_pack_dialog.dart';
 import 'package:stickers/src/dialogs/error_dialog.dart';
 import 'package:stickers/src/globals.dart';
 import 'package:stickers/src/pages/default_page.dart';
@@ -68,8 +69,15 @@ class StickerPacksPageState extends State<StickerPacksPage> {
               if (result == null) return;
               for (final f in result.files) {
                 try {
-                  await importPack(File(f.path!));
+                  final importResult = await importPack(File(f.path!));
                   if (mounted) setState(() {});
+                  for (final pack in importResult.packsMissingMetadata) {
+                    if (!context.mounted) return;
+                    await showDialog<void>(
+                      context: context,
+                      builder: (_) => EditPackDialog(pack),
+                    );
+                  }
                 } on Exception catch (e, st) {
                   debugPrint(e.toString());
                   debugPrintStack(stackTrace: st);

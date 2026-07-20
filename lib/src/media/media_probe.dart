@@ -81,8 +81,7 @@ class MediaProbe {
     if (_startsWith(header, const [0x1a, 0x45, 0xdf, 0xa3])) {
       return SourceMediaKind.video;
     }
-    if (_startsWith(header, const [0x50, 0x4b, 0x03, 0x04]) &&
-        _archiveExtensions.contains(extension)) {
+    if (_startsWith(header, const [0x50, 0x4b, 0x03, 0x04])) {
       return SourceMediaKind.packArchive;
     }
     if (_asciiAt(header, 4, 4) == 'ftyp') {

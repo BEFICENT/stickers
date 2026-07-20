@@ -48,8 +48,7 @@ void main() {
     expect((await probe.probe(file)).kind, SourceMediaKind.image);
   });
 
-  test('requires an archive extension before treating ZIP data as a pack',
-      () async {
+  test('detects ZIP content without relying on the extension', () async {
     final zip = [0x50, 0x4b, 0x03, 0x04];
 
     expect(
@@ -58,7 +57,7 @@ void main() {
     );
     expect(
       (await probe.probe(await fixture('unknown.bin', zip))).kind,
-      SourceMediaKind.unsupported,
+      SourceMediaKind.packArchive,
     );
   });
 

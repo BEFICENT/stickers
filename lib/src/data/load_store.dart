@@ -3,11 +3,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_archive/flutter_archive.dart';
 import 'package:image_editor/image_editor.dart';
 import 'package:path/path.dart' as path;
 import 'package:share_plus/share_plus.dart';
 import 'package:stickers/src/constants.dart';
+import 'package:stickers/src/data/pack_export_service.dart';
 import 'package:stickers/src/data/pack_service.dart';
 import 'package:stickers/src/data/sticker.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
@@ -15,6 +15,7 @@ import 'package:stickers/src/data/pack_repository.dart';
 import 'package:stickers/src/data/pack_validator.dart';
 import 'package:stickers/src/data/safe_archive.dart';
 import 'package:stickers/src/globals.dart';
+import 'package:stickers/src/integrations/shared_pack_metadata_resolver.dart';
 import 'package:stickers/src/media/webp_info.dart';
 
 PackRepository? _packRepository;
@@ -48,38 +49,25 @@ Future<void> savePacks(List<StickerPack> packs) async {
   await packRepository.save(packs);
 }
 
-Future<void> exportPack(StickerPack pack) async {
-  Stopwatch sw = Stopwatch()..start();
-  Directory exportDir = Directory(exportCacheDir);
-  Directory packDir = Directory(
-      "${exportDir.path}/pack_${DateTime.timestamp().millisecondsSinceEpoch}");
-  await packDir.create(recursive: true);
-  File jsonFile = File("${packDir.path}/pack.json");
-  Map<String, dynamic> exportData = pack.toJson();
+Future<void> exportPack(StickerPack pack) => exportPacks([pack]);
 
-  for (var i = 0; i < pack.stickers.length; i++) {
-    final dest = "${packDir.path}/$i.webp";
-    await File(pack.stickers[i].source).copy(dest);
-    exportData["stickers"][i]["source"] = "$i.webp";
-  }
-  if (pack.trayIcon != null) {
-    final dest = "${packDir.path}/tray.png";
-    await File(pack.trayIcon!).copy(dest);
-    exportData["trayIcon"] = "tray.png";
-  }
-  debugPrint("Copy t=${sw.elapsedMilliseconds}ms");
-  await jsonFile.writeAsString(jsonEncode(exportData), flush: true);
-  debugPrint("Json written  t=${sw.elapsedMilliseconds}ms");
-
-  File zipFile = File(
-      "${exportDir.path}/${pack.title.replaceAll(RegExp("[^ \\-_!&a-zA-Z0-9]"), "_")}.zip");
-  await ZipFile.createFromDirectory(sourceDir: packDir, zipFile: zipFile);
-
-  debugPrint("Exported to: ${zipFile.path} t=${sw.elapsedMilliseconds}ms");
-  SharePlus.instance.share(ShareParams(files: [XFile(zipFile.path)]));
+Future<void> exportPacks(Iterable<StickerPack> selectedPacks) async {
+  final archives = await PackExportService(
+    outputDirectory: Directory(exportCacheDir),
+  ).createArchives(selectedPacks);
+  if (archives.isEmpty) return;
+  await SharePlus.instance.share(
+    ShareParams(
+      files: archives.map((archive) => XFile(archive.path)).toList(),
+    ),
+  );
 }
 
-Future<PackImportResult> importPack(File f) async {
+Future<PackImportResult> importPack(
+  File f, {
+  SharedPackMetadataResolver metadataResolver =
+      const PlatformSharedPackMetadataResolver(),
+}) async {
   final stopwatch = Stopwatch()..start();
   final unzipDir = Directory(
     "$mediaCacheDir/pack_${DateTime.timestamp().microsecondsSinceEpoch}",
@@ -87,7 +75,7 @@ Future<PackImportResult> importPack(File f) async {
   try {
     await extractZipSafely(f, unzipDir);
     debugPrint("Unzip t=${stopwatch.elapsedMilliseconds}ms");
-    final result = await _parseImportedPacks(f, unzipDir);
+    final result = await _parseImportedPacks(f, unzipDir, metadataResolver);
     if (result.packs.isEmpty) {
       throw const FormatException("Archive does not contain a sticker pack");
     }
@@ -107,10 +95,11 @@ Future<PackImportResult> importPack(File f) async {
 Future<PackImportResult> _parseImportedPacks(
   File archive,
   Directory unzipDir,
+  SharedPackMetadataResolver metadataResolver,
 ) async {
   switch (path.extension(archive.path).toLowerCase()) {
     case ".wastickers":
-      return _parseWastickersPack(unzipDir);
+      return _parseWastickersPack(unzipDir, metadataResolver);
     case ".stickify":
       final result = <StickerPack>[];
       await for (final entity in unzipDir.list()) {
@@ -155,7 +144,7 @@ Future<PackImportResult> _parseImportedPacks(
     default:
       final jsonFile = File("${unzipDir.path}/pack.json");
       if (!await jsonFile.exists()) {
-        final result = await _parseWastickersPack(unzipDir);
+        final result = await _parseWastickersPack(unzipDir, metadataResolver);
         return result.packs.single.stickers.isEmpty
             ? const PackImportResult(packs: [])
             : result;
@@ -175,7 +164,10 @@ Future<PackImportResult> _parseImportedPacks(
   }
 }
 
-Future<PackImportResult> _parseWastickersPack(Directory unzipDir) async {
+Future<PackImportResult> _parseWastickersPack(
+  Directory unzipDir,
+  SharedPackMetadataResolver metadataResolver,
+) async {
   final contents = await unzipDir.list(followLinks: false).toList();
   final stickerFiles = contents
       .whereType<File>()
@@ -194,9 +186,14 @@ Future<PackImportResult> _parseWastickersPack(Directory unzipDir) async {
   final author = await _readOptionalImportText(
     File(path.join(unzipDir.path, "author.txt")),
   );
+  final sourceMetadata = trayIcon == null
+      ? null
+      : await metadataResolver.resolve(path.basename(trayIcon.path));
+  final resolvedTitle = title ?? sourceMetadata?.title;
+  final resolvedAuthor = author ?? sourceMetadata?.author;
   final pack = StickerPack(
-    title ?? "Imported sticker pack",
-    author ?? "Imported from WhatsApp",
+    resolvedTitle ?? "Imported sticker pack",
+    resolvedAuthor ?? "Imported from WhatsApp",
     "imported",
     stickerFiles.map((file) => Sticker(file.path, ["❤"])).toList(),
     "1000",
@@ -205,7 +202,8 @@ Future<PackImportResult> _parseWastickersPack(Directory unzipDir) async {
   );
   return PackImportResult(
     packs: [pack],
-    packsMissingMetadata: title == null || author == null ? [pack] : const [],
+    packsMissingMetadata:
+        resolvedTitle == null || resolvedAuthor == null ? [pack] : const [],
   );
 }
 
@@ -374,6 +372,14 @@ Future<void> deleteStickerFromPack(StickerPack pack, int index) async {
 
 Future<void> deletePack(StickerPack pack) async {
   await packService.deletePack(pack);
+}
+
+Future<void> deletePacks(Iterable<StickerPack> selectedPacks) async {
+  await packService.deletePacks(selectedPacks);
+}
+
+Future<void> reorderPacks(List<StickerPack> orderedPacks) async {
+  await packService.reorderPacks(orderedPacks);
 }
 
 Future<void> createPack(StickerPack pack) => packService.createPack(pack);

@@ -7,6 +7,7 @@ import 'package:stickers/generated/intl/app_localizations.dart';
 import 'package:stickers/src/app.dart';
 import 'package:stickers/src/constants.dart';
 import 'package:stickers/src/dialogs/edit_quickmode_defaults_dialog.dart';
+import 'package:stickers/src/dialogs/theme_picker_dialog.dart';
 import 'package:stickers/src/globals.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -29,63 +30,17 @@ class SettingsPage extends StatelessWidget {
       appBar: AppBar(
         title: Text(AppLocalizations.of(context)!.settings),
       ),
-      body: Column(
+      body: ListView(
         children: [
           ListTile(
-            leading: const Icon(Icons.invert_colors),
-            title: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(AppLocalizations.of(context)!.theme),
-                Flexible(
-                  child: Container(
-                    padding: const EdgeInsets.only(left: 16, right: 8),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      color: ElevationOverlay.applySurfaceTint(
-                        Theme.of(context).colorScheme.surface,
-                        Theme.of(context).colorScheme.primary,
-                        2,
-                      ),
-                    ),
-                    child: DropdownButton<ThemeMode>(
-                      borderRadius: BorderRadius.circular(16),
-                      dropdownColor: ElevationOverlay.applySurfaceTint(
-                        Theme.of(context).colorScheme.surface,
-                        Theme.of(context).colorScheme.primary,
-                        4,
-                      ),
-                      underline: Container(),
-                      value: controller.themeMode,
-                      items: [
-                        DropdownMenuItem(
-                            value: ThemeMode.system,
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 8),
-                              child: Text(AppLocalizations.of(context)!.system),
-                            )),
-                        DropdownMenuItem(
-                            value: ThemeMode.light,
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 8),
-                              child: Text(AppLocalizations.of(context)!.light),
-                            )),
-                        DropdownMenuItem(
-                            value: ThemeMode.dark,
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 8),
-                              child: Text(AppLocalizations.of(context)!.dark),
-                            )),
-                      ],
-                      onChanged: controller.updateThemeMode,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            leading: const Icon(Icons.palette_outlined),
+            title: Text(AppLocalizations.of(context)!.theme),
+            subtitle: Text(themePresetLabel(
+              AppLocalizations.of(context)!,
+              controller.themePreset,
+            )),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _showThemePicker(context),
           ),
           ListTile(
             leading: const Icon(Icons.language),
@@ -268,6 +223,15 @@ class SettingsPage extends StatelessWidget {
         settingsController: controller,
       ),
     );
+  }
+
+  Future<void> _showThemePicker(BuildContext context) async {
+    final preset = await showDialog(
+      context: context,
+      builder: (_) => ThemePickerDialog(selected: controller.themePreset),
+    );
+    if (preset == null) return;
+    await controller.updateThemePreset(preset);
   }
 }
 

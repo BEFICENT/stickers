@@ -2,17 +2,19 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:image_editor/image_editor.dart';
-import 'package:path/path.dart' as path;
 import 'package:stickers/src/data/pack_validator.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
+import 'package:stickers/src/integrations/whatsapp_provider_storage.dart';
 import 'package:whatsapp_stickers_plus/whatsapp_stickers.dart';
 
 class WhatsappPackService {
   final Directory workingDirectory;
+  final WhatsappProviderStorage providerStorage;
   final PackValidator validator;
 
-  const WhatsappPackService({
+  WhatsappPackService({
     required this.workingDirectory,
+    required this.providerStorage,
     this.validator = const PackValidator(),
   });
 
@@ -31,10 +33,8 @@ class WhatsappPackService {
       throw StateError('Could not generate the WhatsApp tray icon.');
     }
 
-    final trayFile = File(path.join(
-      workingDirectory.path,
-      'tray_${pack.id}_${DateTime.now().microsecondsSinceEpoch}.png',
-    ));
+    await providerStorage.prepareSession();
+    final trayFile = providerStorage.trayFileFor(pack.id);
     await generatedTray.copy(trayFile.path);
     try {
       final whatsappPack = WhatsappStickers(
@@ -42,7 +42,7 @@ class WhatsappPackService {
         name: pack.title,
         publisher: pack.author,
         trayImageFileName: WhatsappStickerImage.fromFile(trayFile.path),
-        imageDataVersion: pack.imageDataVersion,
+        imageDataVersion: whatsappImageDataVersion(pack.imageDataVersion),
         publisherWebsite: pack.publisherWebsite,
         privacyPolicyWebsite: pack.privacyPolicyWebsite,
         licenseAgreementWebsite: pack.licenseAgreementWebsite,
@@ -61,7 +61,6 @@ class WhatsappPackService {
       );
       await whatsappPack.sendToWhatsApp();
     } finally {
-      if (await trayFile.exists()) await trayFile.delete();
       if (await generatedTray.exists()) await generatedTray.delete();
     }
   }

@@ -8,7 +8,9 @@ import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/dialogs/error_dialog.dart';
 import 'package:stickers/src/globals.dart';
 import 'package:stickers/src/integrations/whatsapp_pack_service.dart';
+import 'package:stickers/src/integrations/whatsapp_provider_storage.dart';
 import 'package:whatsapp_stickers_plus/exceptions.dart';
+import 'package:path/path.dart' as path;
 
 bool isValidURL(String input) {
   final url = Uri.tryParse(input);
@@ -35,9 +37,7 @@ String? authorValidator(String? value, BuildContext context) {
 Future<void> sendToWhatsappWithErrorHandling(
     StickerPack pack, BuildContext context) async {
   try {
-    await WhatsappPackService(
-      workingDirectory: Directory(mediaCacheDir),
-    ).send(pack);
+    await createWhatsappPackService().send(pack);
   } on WhatsappStickersAlreadyAddedException catch (_) {
   } on WhatsappStickersException catch (e) {
     showDialog(
@@ -68,6 +68,21 @@ Future<void> sendToWhatsappWithErrorHandling(
             title: AppLocalizations.of(context)!.couldnTAddStickerPack,
             message: e.toString()));
   }
+}
+
+WhatsappPackService createWhatsappPackService() {
+  final documentsDirectory = Directory(packsDir).parent;
+  return WhatsappPackService(
+    workingDirectory: Directory(mediaCacheDir),
+    providerStorage: WhatsappProviderStorage(
+      directory: Directory(
+        path.join(documentsDirectory.path, 'whatsapp_provider'),
+      ),
+      configFile: File(
+        path.join(documentsDirectory.path, 'sticker_packs.json'),
+      ),
+    ),
+  );
 }
 
 int colCount(double width) {

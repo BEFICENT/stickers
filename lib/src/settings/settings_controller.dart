@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stickers/src/theme/app_themes.dart';
 
 import 'settings_service.dart';
 
@@ -13,9 +14,7 @@ class SettingsController with ChangeNotifier {
   // Make SettingsService a private variable so it is not used directly.
   final SettingsService _settingsService;
 
-  // Make ThemeMode a private variable so it is not updated directly without
-  // also persisting the changes with the SettingsService.
-  late ThemeMode _themeMode;
+  late AppThemePreset _themePreset;
 
   late bool _quickMode;
 
@@ -33,8 +32,7 @@ class SettingsController with ChangeNotifier {
 
   String get locale => _locale;
 
-  // Allow Widgets to read the user's preferred ThemeMode.
-  ThemeMode get themeMode => _themeMode;
+  AppThemePreset get themePreset => _themePreset;
 
   bool get quickMode => _quickMode;
 
@@ -77,7 +75,7 @@ class SettingsController with ChangeNotifier {
   /// local database or the internet. The controller only knows it can load the
   /// settings from the service.
   Future<void> loadSettings() async {
-    _themeMode = await _settingsService.themeMode();
+    _themePreset = await _settingsService.themePreset();
     _quickMode = await _settingsService.quickMode();
     _defaultTitle = await _settingsService.defaultTitle();
     _defaultAuthor = await _settingsService.defaultAuthor();
@@ -87,13 +85,11 @@ class SettingsController with ChangeNotifier {
     notifyListeners();
   }
 
-  /// Update and persist the ThemeMode based on the user's selection.
-  Future<void> updateThemeMode(ThemeMode? newThemeMode) async {
-    if (newThemeMode == null) return;
-    if (newThemeMode == _themeMode) return;
+  Future<void> updateThemePreset(AppThemePreset newThemePreset) async {
+    if (newThemePreset == _themePreset) return;
 
-    _themeMode = newThemeMode;
+    _themePreset = newThemePreset;
     notifyListeners();
-    await _settingsService.updateThemeMode(newThemeMode);
+    await _settingsService.updateThemePreset(newThemePreset);
   }
 }

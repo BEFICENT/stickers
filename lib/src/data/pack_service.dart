@@ -188,26 +188,69 @@ class PackService {
   }
 
   Future<void> deletePack(StickerPack pack) async {
-    final index = store.indexOf(pack);
-    if (index < 0) return;
+    await deletePacks([pack]);
+  }
+
+  Future<void> deletePacks(Iterable<StickerPack> packs) async {
+    final selected = packs.toSet();
+    final indexedPacks = <({int index, StickerPack pack})>[];
+    for (var index = 0; index < store.length; index++) {
+      if (selected.contains(store[index])) {
+        indexedPacks.add((index: index, pack: store[index]));
+      }
+    }
+    if (indexedPacks.isEmpty) return;
+
     await store.transaction(() async {
-      store.removeAt(index);
+      for (final entry in indexedPacks.reversed) {
+        store.removeAt(entry.index);
+      }
       try {
         await repository.save(store);
       } catch (_) {
-        store.insert(index, pack);
+        for (final entry in indexedPacks) {
+          store.insert(entry.index, entry.pack);
+        }
         rethrow;
       }
     });
 
-    final directory = Directory(path.join(root.path, pack.id));
-    if (await directory.exists()) {
-      try {
-        await directory.delete(recursive: true);
-      } on FileSystemException catch (error) {
-        debugPrint('Failed to clean deleted pack directory: $error');
+    for (final entry in indexedPacks) {
+      final directory = Directory(path.join(root.path, entry.pack.id));
+      if (await directory.exists()) {
+        try {
+          await directory.delete(recursive: true);
+        } on FileSystemException catch (error) {
+          debugPrint('Failed to clean deleted pack directory: $error');
+        }
       }
     }
+  }
+
+  Future<void> reorderPacks(List<StickerPack> orderedPacks) async {
+    final currentPacks = store.toList(growable: false);
+    final requestedPacks = orderedPacks.toSet();
+    if (orderedPacks.length != currentPacks.length ||
+        requestedPacks.length != orderedPacks.length ||
+        !requestedPacks.containsAll(currentPacks)) {
+      throw ArgumentError.value(
+        orderedPacks,
+        'orderedPacks',
+        'The new order must contain every existing pack exactly once.',
+      );
+    }
+
+    if (_hasSameOrder(currentPacks, orderedPacks)) return;
+
+    await store.transaction(() async {
+      _replaceStoreContents(orderedPacks);
+      try {
+        await repository.save(store);
+      } catch (_) {
+        _replaceStoreContents(currentPacks);
+        rethrow;
+      }
+    });
   }
 
   Future<void> _setTrayBytes(StickerPack pack, Uint8List data) async {
@@ -269,5 +312,21 @@ class PackService {
       throw const FormatException('Pack image data version is invalid.');
     }
     return (version + 1).toString();
+  }
+
+  bool _hasSameOrder(
+    List<StickerPack> currentPacks,
+    List<StickerPack> orderedPacks,
+  ) {
+    for (var index = 0; index < currentPacks.length; index++) {
+      if (!identical(currentPacks[index], orderedPacks[index])) return false;
+    }
+    return true;
+  }
+
+  void _replaceStoreContents(List<StickerPack> replacement) {
+    store
+      ..clear()
+      ..addAll(replacement);
   }
 }

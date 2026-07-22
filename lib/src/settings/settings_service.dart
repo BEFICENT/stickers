@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:stickers/src/theme/app_themes.dart';
 
 /// A service that stores and retrieves user settings.
 ///
@@ -11,6 +11,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SettingsService {
   static const _defaultTitleKey = "defaultTitle";
   static const _legacyDefaultTitleKey = "defaultPackName";
+  static const _themePresetKey = "themePreset";
+  static const _legacyThemeModeKey = "themeMode";
 
   late SharedPreferences _prefs;
   late Future<SharedPreferences> _pFuture;
@@ -23,13 +25,20 @@ class SettingsService {
     await _pFuture;
   }
 
-  /// Loads the User's preferred ThemeMode from local or remote storage.
-  Future<ThemeMode> themeMode() async {
-    String mode = _prefs.getString("themeMode") ?? "";
-    return ThemeMode.values.firstWhere(
-      (element) => element.name == mode,
-      orElse: () => ThemeMode.system,
-    );
+  Future<AppThemePreset> themePreset() async {
+    final preset = _prefs.getString(_themePresetKey);
+    if (preset != null) {
+      return AppThemePreset.values.firstWhere(
+        (value) => value.name == preset,
+        orElse: () => AppThemePreset.system,
+      );
+    }
+
+    return switch (_prefs.getString(_legacyThemeModeKey)) {
+      "light" => AppThemePreset.canvas,
+      "dark" => AppThemePreset.carbon,
+      _ => AppThemePreset.system,
+    };
   }
 
   Future<bool> quickMode() async => _prefs.getBool("quickMode") ?? false;
@@ -63,9 +72,11 @@ class SettingsService {
     return "en";
   }
 
-  /// Persists the user's preferred ThemeMode to local or remote storage.
-  Future<void> updateThemeMode(ThemeMode theme) async {
-    await _persist(_prefs.setString("themeMode", theme.name), "themeMode");
+  Future<void> updateThemePreset(AppThemePreset preset) async {
+    await _persist(
+      _prefs.setString(_themePresetKey, preset.name),
+      _themePresetKey,
+    );
   }
 
   Future<void> updateQuickMode(bool quickMode) async {

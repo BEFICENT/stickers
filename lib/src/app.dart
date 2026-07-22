@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:share_handler/share_handler.dart';
 import 'package:stickers/generated/intl/app_localizations.dart';
 import 'package:stickers/src/data/load_store.dart';
+import 'package:stickers/src/data/pack_batch_import.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/dialogs/edit_pack_dialog.dart';
 import 'package:stickers/src/dialogs/error_dialog.dart';
@@ -13,6 +14,7 @@ import 'package:stickers/src/globals.dart';
 import 'package:stickers/src/media/media_probe.dart';
 import 'package:stickers/src/navigation/app_router.dart';
 import 'package:stickers/src/pages/select_pack_page.dart';
+import 'package:stickers/src/theme/app_themes.dart';
 import 'package:stickers/src/util.dart';
 
 import 'settings/settings_controller.dart';
@@ -36,6 +38,9 @@ class StickersApp extends StatefulWidget {
 class StickersAppState extends State<StickersApp> {
   late Locale _locale;
   StreamSubscription<SharedMedia>? _sharedMediaSubscription;
+  final List<StickerPack> _packsAwaitingMetadata = [];
+  int _pendingPackImportFailures = 0;
+  bool _openingPackResults = false;
 
   @override
   void initState() {
@@ -61,8 +66,10 @@ class StickersAppState extends State<StickersApp> {
       debugPrint("Initial Media received");
       await _processMedia(initialMedia);
       if (mounted) {
-        WidgetsBinding.instance
-            .addPostFrameCallback((_) => _openPendingMedia());
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _openPendingMedia();
+          unawaited(_openPendingPackResults());
+        });
       }
     }
     _sharedMediaSubscription =
@@ -70,7 +77,10 @@ class StickersAppState extends State<StickersApp> {
       if (!mounted) return;
       debugPrint("Media Stream received");
       await _processMedia(sharedMedia);
-      if (mounted) _openPendingMedia();
+      if (mounted) {
+        _openPendingMedia();
+        unawaited(_openPendingPackResults());
+      }
     });
   }
 
@@ -84,6 +94,38 @@ class StickersAppState extends State<StickersApp> {
       (route) => false,
       arguments: pendingMedia,
     );
+  }
+
+  Future<void> _openPendingPackResults() async {
+    if (!mounted || _openingPackResults) {
+      return;
+    }
+    _openingPackResults = true;
+    try {
+      while (mounted && _packsAwaitingMetadata.isNotEmpty) {
+        final currentContext = navigatorKey.currentContext;
+        if (currentContext == null || !currentContext.mounted) return;
+        final pack = _packsAwaitingMetadata.removeAt(0);
+        await showDialog<void>(
+          context: currentContext,
+          builder: (_) => EditPackDialog(pack),
+        );
+      }
+      if (mounted && _pendingPackImportFailures > 0) {
+        final currentContext = navigatorKey.currentContext;
+        if (currentContext == null || !currentContext.mounted) return;
+        _pendingPackImportFailures = 0;
+        await showDialog<void>(
+          context: currentContext,
+          builder: (context) => ErrorDialog(
+            message: AppLocalizations.of(context)!.checkIfFileValid,
+            title: AppLocalizations.of(context)!.importError,
+          ),
+        );
+      }
+    } finally {
+      _openingPackResults = false;
+    }
   }
 
   @override
@@ -101,6 +143,7 @@ class StickersAppState extends State<StickersApp> {
     return ListenableBuilder(
       listenable: widget.settingsController,
       builder: (BuildContext context, Widget? child) {
+        final themePreset = widget.settingsController.themePreset;
         return MaterialApp(
           // Providing a restorationScopeId allows the Navigator built by the
           // MaterialApp to restore the navigation stack when a user leaves and
@@ -133,12 +176,9 @@ class StickersAppState extends State<StickersApp> {
           onGenerateTitle: (BuildContext context) =>
               AppLocalizations.of(context)!.appTitle,
 
-          // Define a light and dark color theme. Then, read the user's
-          // preferred ThemeMode (light, dark, or system default) from the
-          // SettingsController to display the correct theme.
-          theme: ThemeData(),
-          darkTheme: ThemeData.dark(),
-          themeMode: widget.settingsController.themeMode,
+          theme: AppThemes.lightFor(themePreset),
+          darkTheme: AppThemes.darkFor(themePreset),
+          themeMode: themePreset.themeMode,
           navigatorKey: navigatorKey,
 
           // Define a function to handle named routes in order to support
@@ -153,48 +193,53 @@ class StickersAppState extends State<StickersApp> {
   }
 
   Future<void> _processMedia(SharedMedia media) async {
-    final attachments = media.attachments;
-    final attachment = attachments?.whereType<SharedAttachment>().firstOrNull;
-    if (attachment == null || attachment.path.isEmpty) {
+    final attachments = media.attachments
+            ?.whereType<SharedAttachment>()
+            .where((attachment) => attachment.path.isNotEmpty)
+            .toList(growable: false) ??
+        const <SharedAttachment>[];
+    if (attachments.isEmpty) {
       _showShareError(
         (context) => AppLocalizations.of(context)!.unrecognizedFormat,
       );
       return;
     }
-    final MediaDescriptor descriptor;
+    final descriptors = <MediaDescriptor>[];
     try {
-      descriptor = await const MediaProbe().probe(File(attachment.path));
+      for (final attachment in attachments) {
+        descriptors.add(
+          await const MediaProbe().probe(File(attachment.path)),
+        );
+      }
     } on FileSystemException {
       _showShareError(
         (context) => AppLocalizations.of(context)!.couldntLoadMedia,
       );
       return;
     }
-    if (descriptor.kind == SourceMediaKind.packArchive) {
-      try {
-        final importResult = await importPack(File(attachment.path));
-        if (mounted) setState(() {});
-        for (final pack in importResult.packsMissingMetadata) {
-          if (!mounted || navigatorKey.currentContext == null) return;
-          await showDialog<void>(
-            context: navigatorKey.currentContext!,
-            builder: (_) => EditPackDialog(pack),
-          );
-        }
-      } on Exception catch (error, stackTrace) {
-        debugPrint('Shared pack import failed: $error');
-        debugPrintStack(stackTrace: stackTrace);
-        if (mounted) {
-          showDialog(
-              context: navigatorKey.currentState!.context,
-              builder: (context) => ErrorDialog(
-                    message: AppLocalizations.of(context)!.checkIfFileValid,
-                    title: AppLocalizations.of(context)!.importError,
-                  ));
-        }
+    if (descriptors.every(
+      (descriptor) => descriptor.kind == SourceMediaKind.packArchive,
+    )) {
+      final result = await importPackBatch(
+        attachments.map((attachment) => File(attachment.path)),
+      );
+      _packsAwaitingMetadata.addAll(result.packsMissingMetadata);
+      _pendingPackImportFailures += result.failures.length;
+      for (final failure in result.failures) {
+        debugPrint('Shared pack import failed: ${failure.error}');
+        debugPrintStack(stackTrace: failure.stackTrace);
       }
+      if (mounted) setState(() {});
       return;
     }
+    if (attachments.length != 1) {
+      _showShareError(
+        (context) => AppLocalizations.of(context)!.unrecognizedFormat,
+      );
+      return;
+    }
+    final attachment = attachments.single;
+    final descriptor = descriptors.single;
     if (descriptor.kind == SourceMediaKind.unsupported) {
       _showShareError(
         (context) => AppLocalizations.of(context)!.unrecognizedFormat,

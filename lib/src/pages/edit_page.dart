@@ -232,10 +232,11 @@ class _EditPageState extends State<EditPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Theme(
-                      data: ThemeData(
-                        colorScheme: ColorScheme.fromSeed(
-                            seedColor: Colors.green,
-                            brightness: Theme.of(context).brightness),
+                      data: Theme.of(context).copyWith(
+                        colorScheme: Theme.of(context).colorScheme.copyWith(
+                              primary: Colors.green,
+                              onPrimary: Colors.white,
+                            ),
                       ),
                       child: FilledButton.icon(
                         onPressed: () {

@@ -11,6 +11,7 @@ import 'package:stickers/src/data/pack_repository.dart';
 import 'package:stickers/src/data/pack_store.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/globals.dart' as globals;
+import 'package:stickers/src/integrations/shared_pack_metadata_resolver.dart';
 
 void main() {
   late Directory temporaryDirectory;
@@ -105,6 +106,31 @@ void main() {
     expect(globals.packs.single.author, 'Legacy author');
     expect(result.packsMissingMetadata, isEmpty);
   });
+
+  test('recovers metadata from the installed source sticker provider',
+      () async {
+    final archive = await _createWhatsAppSharedArchive(temporaryDirectory);
+
+    final result = await importPack(
+      archive,
+      metadataResolver: const _FixedMetadataResolver(),
+    );
+
+    expect(result.packs.single.title, 'Recovered title');
+    expect(result.packs.single.author, 'Recovered author');
+    expect(result.packsMissingMetadata, isEmpty);
+  });
+}
+
+class _FixedMetadataResolver implements SharedPackMetadataResolver {
+  const _FixedMetadataResolver();
+
+  @override
+  Future<SharedPackMetadata?> resolve(String trayFileName) async =>
+      const SharedPackMetadata(
+        title: 'Recovered title',
+        author: 'Recovered author',
+      );
 }
 
 class _FailingRepository extends PackRepository {

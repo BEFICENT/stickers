@@ -9,6 +9,7 @@ import 'package:stickers/src/batch/batch_import_queue.dart';
 import 'package:stickers/src/checker_painter.dart';
 import 'package:stickers/src/data/load_store.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
+import 'package:stickers/src/editor/crop_aspect_preset.dart';
 import 'package:stickers/src/navigation/edit_arguments.dart';
 import 'package:stickers/src/pages/default_page.dart';
 
@@ -51,20 +52,51 @@ class _CropPageState extends State<CropPage> with TickerProviderStateMixin {
         reverseCurve: Curves.ease);
     anim.drive(tween);
     _maskColorController.addListener(_animationListener);
+    _editorController.addListener(_editorChanged);
   }
 
   void _animationListener() {
-    setState(() {});
+    if (mounted) setState(() {});
+  }
+
+  void _editorChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _syncAspectPreset() {
+    if (!mounted) return;
+    setState(() {
+      _aspectPreset = CropAspectPreset.fromRatio(
+        _editorController.cropAspectRatio,
+      );
+    });
+  }
+
+  void _undo() {
+    _editorController.undo();
+    _syncAspectPreset();
+  }
+
+  void _redo() {
+    _editorController.redo();
+    _syncAspectPreset();
+  }
+
+  void _rotate(double degree) {
+    _editorController.rotate(degree: degree, animation: true);
+    _syncAspectPreset();
   }
 
   @override
   void dispose() {
-    super.dispose();
     _maskColorController.removeListener(_animationListener);
     _maskColorController.dispose();
+    _editorController.removeListener(_editorChanged);
+    _editorController.dispose();
+    super.dispose();
   }
 
-  double? _aspectRatio;
+  CropAspectPreset _aspectPreset = CropAspectPreset.free;
 
   @override
   Widget build(BuildContext context) {
@@ -98,11 +130,11 @@ class _CropPageState extends State<CropPage> with TickerProviderStateMixin {
                       editorMaskColorHandler: (ctx, pointerDown) {
                         if (_previousPtrVal && !pointerDown) {
                           _maskColorController.animateTo(1,
-                              duration: Duration(milliseconds: 150));
+                              duration: const Duration(milliseconds: 150));
                         }
                         if (!_previousPtrVal && pointerDown) {
                           _maskColorController.animateTo(0,
-                              duration: Duration(milliseconds: 150));
+                              duration: const Duration(milliseconds: 150));
                         }
                         _previousPtrVal = pointerDown;
                         return Color.lerp(
@@ -112,17 +144,19 @@ class _CropPageState extends State<CropPage> with TickerProviderStateMixin {
                         )!;
                       },
                       animationCurve: Curves.ease,
-                      tickerDuration: Duration(),
-                      lineHeight: 3,
+                      tickerDuration: const Duration(milliseconds: 250),
+                      autoCenterCropRect: false,
+                      clampCropRectToImage: true,
+                      lineHeight: 2,
                       lineColor:
-                          Theme.of(context).colorScheme.primary.withAlpha(100),
-                      animationDuration: const Duration(milliseconds: 400),
-                      maxScale: double.infinity,
-                      cropRectPadding: const EdgeInsets.all(40.0),
-                      hitTestSize: 80.0,
-                      cropAspectRatio: _aspectRatio,
+                          Theme.of(context).colorScheme.primary.withAlpha(190),
+                      animationDuration: const Duration(milliseconds: 250),
+                      maxScale: 12,
+                      cropRectPadding: const EdgeInsets.all(24),
+                      hitTestSize: 28,
+                      cropAspectRatio: _aspectPreset.ratio,
                       cornerColor: Theme.of(context).colorScheme.primary,
-                      cornerSize: const Size(30, 5),
+                      cornerSize: const Size(38, 6),
                       controller: _editorController,
                     );
                   },
@@ -132,91 +166,98 @@ class _CropPageState extends State<CropPage> with TickerProviderStateMixin {
             Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     IconButton(
-                      onPressed: () {
-                        _editorController.rotate(degree: -90, animation: true);
-                      },
-                      icon: Icon(Icons.rotate_left),
+                      tooltip: AppLocalizations.of(context)!.undo,
+                      onPressed: _editorController.canUndo ? _undo : null,
+                      icon: const Icon(Icons.undo),
                     ),
                     IconButton(
+                      tooltip: AppLocalizations.of(context)!.redo,
+                      onPressed: _editorController.canRedo ? _redo : null,
+                      icon: const Icon(Icons.redo),
+                    ),
+                    IconButton(
+                      tooltip: AppLocalizations.of(context)!.flipHorizontal,
+                      onPressed: () => _editorController.flip(animation: true),
+                      icon: const Icon(Icons.flip),
+                    ),
+                    IconButton(
+                      tooltip: AppLocalizations.of(context)!.rotateLeft,
+                      onPressed: () => _rotate(-90),
+                      icon: const Icon(Icons.rotate_left),
+                    ),
+                    IconButton(
+                      tooltip: AppLocalizations.of(context)!.rotateRight,
+                      onPressed: () => _rotate(90),
+                      icon: const Icon(Icons.rotate_right),
+                    ),
+                    IconButton(
+                      tooltip: AppLocalizations.of(context)!.resetCrop,
                       onPressed: () {
-                        _editorController.rotate(degree: 90, animation: true);
+                        setState(() => _aspectPreset = CropAspectPreset.free);
+                        _editorController.reset();
                       },
-                      icon: Icon(Icons.rotate_right),
+                      icon: const Icon(Icons.fit_screen),
                     ),
                   ],
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: SegmentedButton<double>(
-                    showSelectedIcon: false,
-                    emptySelectionAllowed: true,
-                    multiSelectionEnabled: false,
-                    segments: [
-                      ButtonSegment(
-                          value: 16 / 9,
-                          icon: Column(children: [
-                            Icon(Icons.crop_16_9),
-                            Text(
-                              "16:9",
-                              style: TextStyle(fontSize: 10),
-                            )
-                          ])),
-                      ButtonSegment(
-                          value: 3 / 2,
-                          icon: Column(children: [
-                            Icon(Icons.crop_3_2),
-                            Text(
-                              "3:2",
-                              style: TextStyle(fontSize: 10),
-                            )
-                          ])),
-                      ButtonSegment(
-                          value: 1,
-                          icon: Column(children: [
-                            Icon(Icons.crop_din),
-                            Text(
-                              "1:1",
-                              style: TextStyle(fontSize: 10),
-                            )
-                          ])),
-                      ButtonSegment(
-                          value: 2 / 3,
-                          icon: Column(children: [
-                            Transform.rotate(
-                              angle: pi / 2,
-                              child: Icon(Icons.crop_3_2),
-                            ),
-                            Text(
-                              "2:3",
-                              style: TextStyle(fontSize: 10),
-                            )
-                          ])),
-                      ButtonSegment(
-                          value: 9 / 16,
-                          icon: Column(children: [
-                            Transform.rotate(
-                              angle: pi / 2,
-                              child: Icon(Icons.crop_16_9),
-                            ),
-                            Text(
-                              "9:16",
-                              style: TextStyle(fontSize: 10),
-                            )
-                          ])),
-                    ],
-                    selected: {_aspectRatio == null ? 0 : _aspectRatio!},
-                    onSelectionChanged: (v) {
-                      setState(() {
-                        _aspectRatio = v.firstOrNull;
-                        HapticFeedback.lightImpact();
-                      });
-                    },
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SegmentedButton<CropAspectPreset>(
+                      showSelectedIcon: false,
+                      segments: [
+                        ButtonSegment(
+                          value: CropAspectPreset.free,
+                          icon: const Icon(Icons.crop_free),
+                          label: Text(AppLocalizations.of(context)!.freeCrop),
+                        ),
+                        const ButtonSegment(
+                          value: CropAspectPreset.landscapeWide,
+                          icon: Icon(Icons.crop_16_9),
+                          label: Text("16:9"),
+                        ),
+                        const ButtonSegment(
+                          value: CropAspectPreset.landscape,
+                          icon: Icon(Icons.crop_3_2),
+                          label: Text("3:2"),
+                        ),
+                        const ButtonSegment(
+                          value: CropAspectPreset.square,
+                          icon: Icon(Icons.crop_din),
+                          label: Text("1:1"),
+                        ),
+                        ButtonSegment(
+                          value: CropAspectPreset.portrait,
+                          icon: Transform.rotate(
+                            angle: pi / 2,
+                            child: const Icon(Icons.crop_3_2),
+                          ),
+                          label: const Text("2:3"),
+                        ),
+                        ButtonSegment(
+                          value: CropAspectPreset.portraitTall,
+                          icon: Transform.rotate(
+                            angle: pi / 2,
+                            child: const Icon(Icons.crop_16_9),
+                          ),
+                          label: const Text("9:16"),
+                        ),
+                      ],
+                      selected: {_aspectPreset},
+                      onSelectionChanged: (selection) {
+                        final preset = selection.first;
+                        _editorController.updateCropAspectRatio(preset.ratio);
+                        setState(() => _aspectPreset = preset);
+                        HapticFeedback.selectionClick();
+                      },
+                    ),
                   ),
                 ),
                 Column(

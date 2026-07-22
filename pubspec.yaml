@@ -36,9 +36,7 @@ dependencies:
       url: https://github.com/lolocomotive/matrix_gesture_detector
       ref: 62749b7e18f6a61834ca7f5bb45f9c7ace12bdd2
   extended_image:
-    git:
-      url: https://github.com/lolocomotive/extended_image
-      ref: 9a0a7a577c29519d3535b14db95922bb0d53b78c
+    path: third_party/extended_image
   image_editor:
     git:
       url: https://github.com/lolocomotive/flutter_image_editor

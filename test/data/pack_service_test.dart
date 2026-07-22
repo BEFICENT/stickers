@@ -143,6 +143,51 @@ void main() {
     expect(pack.author, 'Author');
     expect(pack.imageDataVersion, 'invalid');
   });
+
+  test('reorders and persists packs', () async {
+    final first = _packWithId('first');
+    final second = _packWithId('second');
+    final third = _packWithId('third');
+    final store = PackStore([first, second, third]);
+    final service = createService(store);
+
+    await service.reorderPacks([third, first, second]);
+
+    expect(store, [same(third), same(first), same(second)]);
+    final loaded = await PackRepository(temporaryDirectory).load();
+    expect(loaded.map((pack) => pack.id), ['third', 'first', 'second']);
+  });
+
+  test('rolls back pack order when persistence fails', () async {
+    final first = _packWithId('first');
+    final second = _packWithId('second');
+    final store = PackStore([first, second]);
+    final service = createService(
+      store,
+      repository: _FailingRepository(temporaryDirectory),
+    );
+
+    await expectLater(
+      service.reorderPacks([second, first]),
+      throwsA(isA<PackRepositoryException>()),
+    );
+
+    expect(store, [same(first), same(second)]);
+  });
+
+  test('rejects an incomplete pack order', () async {
+    final first = _packWithId('first');
+    final second = _packWithId('second');
+    final store = PackStore([first, second]);
+    final service = createService(store);
+
+    await expectLater(
+      service.reorderPacks([first]),
+      throwsArgumentError,
+    );
+
+    expect(store, [same(first), same(second)]);
+  });
 }
 
 StickerPack _pack({List<Sticker>? stickers}) => StickerPack(
@@ -150,6 +195,15 @@ StickerPack _pack({List<Sticker>? stickers}) => StickerPack(
       'Author',
       'pack',
       stickers ?? [],
+      '0',
+      false,
+    );
+
+StickerPack _packWithId(String id) => StickerPack(
+      id,
+      'Author',
+      id,
+      const [],
       '0',
       false,
     );

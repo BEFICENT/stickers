@@ -24,11 +24,8 @@ class StickerPackPreviewCard extends StatefulWidget {
 class _StickerPackPreviewCardState extends State<StickerPackPreviewCard> {
   @override
   Widget build(BuildContext context) {
-    final Color surface = ElevationOverlay.applySurfaceTint(
-      Theme.of(context).colorScheme.surface,
-      Theme.of(context).colorScheme.primary,
-      2,
-    );
+    final colorScheme = Theme.of(context).colorScheme;
+    final surface = colorScheme.surfaceContainerLow;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -36,8 +33,10 @@ class _StickerPackPreviewCardState extends State<StickerPackPreviewCard> {
         closedColor: surface,
         openColor: Theme.of(context).colorScheme.surface,
         middleColor: surface,
-        closedShape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        closedShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: colorScheme.outlineVariant),
+        ),
         closedBuilder: (context, action) => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stickers/src/settings/settings_service.dart';
+import 'package:stickers/src/theme/app_themes.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -16,14 +16,14 @@ void main() {
   test('persists and reloads every supported setting', () async {
     final service = await createService({});
 
-    await service.updateThemeMode(ThemeMode.dark);
+    await service.updateThemePreset(AppThemePreset.oledMint);
     await service.updateQuickMode(true);
     await service.updateDefaultTitle('Favorites');
     await service.updateDefaultAuthor('Author');
     await service.updateLocale('de');
     await service.updateGoogleFonts(true);
 
-    expect(await service.themeMode(), ThemeMode.dark);
+    expect(await service.themePreset(), AppThemePreset.oledMint);
     expect(await service.quickMode(), isTrue);
     expect(await service.defaultTitle(), 'Favorites');
     expect(await service.defaultAuthor(), 'Author');
@@ -50,5 +50,22 @@ void main() {
     });
 
     expect(await service.defaultTitle(), 'Current title');
+  });
+
+  test('migrates legacy light and dark theme modes', () async {
+    final light = await createService({'themeMode': 'light'});
+    expect(await light.themePreset(), AppThemePreset.canvas);
+
+    final dark = await createService({'themeMode': 'dark'});
+    expect(await dark.themePreset(), AppThemePreset.carbon);
+
+    final system = await createService({'themeMode': 'system'});
+    expect(await system.themePreset(), AppThemePreset.system);
+  });
+
+  test('falls back to system for an unknown theme preset', () async {
+    final service = await createService({'themePreset': 'removed-theme'});
+
+    expect(await service.themePreset(), AppThemePreset.system);
   });
 }

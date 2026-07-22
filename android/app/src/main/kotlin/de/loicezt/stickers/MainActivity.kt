@@ -1,5 +1,8 @@
 package de.loicezt.stickers
 
+import android.content.ContentResolver
+import android.net.Uri
+import android.util.Log
 import de.loicezt.stickers.gif.GIF_PREVIEW_VIEW_TYPE
 import de.loicezt.stickers.gif.GifPreviewViewFactory
 import de.loicezt.stickers.video.CropAndScale
@@ -17,6 +20,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class MainActivity : FlutterActivity() {
@@ -121,6 +125,21 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
 
+                "resolveStickerPackMetadata" -> {
+                    val authority = call.argument<String>("authority")
+                    val identifier = call.argument<String>("identifier")
+                    if (authority.isNullOrBlank() || identifier.isNullOrBlank()) {
+                        result.success(null)
+                        return@setMethodCallHandler
+                    }
+                    scope.launch(Dispatchers.IO) {
+                        val metadata = resolveStickerPackMetadata(authority, identifier)
+                        withContext(Dispatchers.Main) {
+                            result.success(metadata)
+                        }
+                    }
+                }
+
                 else -> result.notImplemented()
             }
         }
@@ -198,6 +217,47 @@ class MainActivity : FlutterActivity() {
                 }
             }
         )
+    }
+
+    private fun resolveStickerPackMetadata(
+        authority: String,
+        identifier: String
+    ): Map<String, String>? {
+        if (!authority.endsWith(".stickercontentprovider") || identifier.contains('/')) {
+            return null
+        }
+        val uri = Uri.Builder()
+            .scheme(ContentResolver.SCHEME_CONTENT)
+            .authority(authority)
+            .appendPath("metadata")
+            .appendPath(identifier)
+            .build()
+        Log.i("SharedPackMetadata", "Resolving $uri")
+        return try {
+            val metadata = contentResolver.query(
+                uri,
+                arrayOf("sticker_pack_name", "sticker_pack_publisher"),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                if (!cursor.moveToFirst()) return@use null
+                val title = cursor.getString(cursor.getColumnIndexOrThrow("sticker_pack_name"))
+                val author = cursor.getString(cursor.getColumnIndexOrThrow("sticker_pack_publisher"))
+                if (title.isNullOrBlank() || author.isNullOrBlank()) null else {
+                    mapOf("title" to title, "author" to author)
+                }
+            }
+            Log.i("SharedPackMetadata", "Resolved metadata: $metadata")
+            metadata
+        } catch (exception: Exception) {
+            Log.i(
+                "SharedPackMetadata",
+                "Could not resolve $authority/$identifier",
+                exception
+            )
+            null
+        }
     }
 
     override fun onDestroy() {

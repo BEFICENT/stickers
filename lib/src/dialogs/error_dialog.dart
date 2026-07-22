@@ -9,12 +9,16 @@ class ErrorDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Theme(
         data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.fromSeed(
-                seedColor: Colors.red,
-                brightness: Theme.of(context).brightness),
-            brightness: Theme.of(context).brightness),
+          colorScheme: colorScheme.copyWith(
+            primary: colorScheme.error,
+            onPrimary: colorScheme.onError,
+            primaryContainer: colorScheme.errorContainer,
+            onPrimaryContainer: colorScheme.onErrorContainer,
+          ),
+        ),
         child: AlertDialog(
           title: Text(title),
           content: Text(message),
